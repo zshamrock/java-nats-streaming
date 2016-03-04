@@ -31,6 +31,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +41,7 @@ import io.nats.client.Channel;
 
 import static io.nats.stan.UnitTestUtilities.*;
 
+@Category(UnitTest.class)
 public class ConnectionTest {
 	@Rule
 	public TestCasePrinterRule pr = new TestCasePrinterRule(System.out);
@@ -1557,7 +1559,8 @@ public class ConnectionTest {
 		while(true) {
 			System.err.printf("#\n# Run %d\n#\n", ++i);
 			try {
-				t.testSubscriptionStartAtFirst();
+//				t.testSubscriptionStartAtFirst();
+				t.testPubMultiQueueSubWithRedelivery();
 				sleep(1000);
 			} catch (Throwable e) {
 				e.printStackTrace();
