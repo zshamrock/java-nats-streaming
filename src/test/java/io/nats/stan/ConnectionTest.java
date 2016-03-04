@@ -1,3 +1,10 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2016 Apcera Inc.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the MIT License (MIT)
+ * which accompanies this distribution, and is available at
+ * http://opensource.org/licenses/MIT
+ *******************************************************************************/
 package io.nats.stan;
 
 import static org.mockito.Mockito.*;
@@ -24,8 +31,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -663,14 +668,17 @@ public class ConnectionTest {
 	
 	@Test
 	public void testSubscriptionStartAtFirst() {
-		try (STANServer s = runServer(clusterName, true)) {
+		try (STANServer s = runServer(clusterName, false)) {
 			ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
-			try (Connection sc = cf.createConnection()) {
+			try (ConnectionImpl sc = cf.createConnection()) {
 				// Publish ten messages
 				for (int i = 1; i <= 10; i++) {
 					sc.publish("foo", String.format("%d", i).getBytes());
+//					sleep(1);
 				}
-
+				
+				sleep(200);
+				
 				final Channel<Boolean> ch = new Channel<Boolean>();
 				final AtomicInteger received = new AtomicInteger(0);
 				final int shouldReceive = 10;
@@ -686,9 +694,9 @@ public class ConnectionTest {
 						synchronized(lock) {
 							savedMsgs.add(m);
 						}
-						logger.info("ThreadId {}: {}\n", id, m);
+//						logger.info("ThreadId {}: {}", id, m);
 						if (received.incrementAndGet() >= shouldReceive) {
-							logger.info("ThreadId {}: writing to channel\n", id);
+//							logger.info("ThreadId {}: writing to channel", id);
 							ch.add(true);
 						}
 					}
@@ -730,6 +738,76 @@ public class ConnectionTest {
 		}
 	}
 	
+	@Test
+	public void testSubscriptionStartAtFirstOverlapping() {
+		try (STANServer s = runServer(clusterName, false)) {
+			ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
+			try (ConnectionImpl sc = cf.createConnection()) {
+				// Publish ten messages
+				for (int i = 1; i <= 10; i++) {
+					sc.publish("foo", String.format("%d", i).getBytes());
+				}
+				
+				sleep(200);
+				
+				final Channel<Boolean> ch = new Channel<Boolean>();
+				final AtomicInteger received = new AtomicInteger(0);
+				final int shouldReceive = 10;
+				
+				// Capture the messages that are delivered.
+				final List<Message> savedMsgs = new ArrayList<Message>();
+				final Object lock = new Object();
+				MessageHandler mcb = new MessageHandler() {
+					public void onMessage(Message m) {
+						// TODO remove this
+						long id = Thread.currentThread().getId();
+						
+						synchronized(lock) {
+							savedMsgs.add(m);
+						}
+//						logger.info("ThreadId {}: {}", id, m);
+						if (received.incrementAndGet() >= shouldReceive) {
+//							logger.info("ThreadId {}: writing to channel", id);
+							ch.add(true);
+						}
+					}
+				};
+
+				// Should receive all messages.
+				try (Subscription sub = sc.subscribe("foo", mcb, new SubscriptionOptions.Builder()
+						.deliverAllAvailable().build()))
+				{
+					// Check for sub setup
+					assertEquals(StartPosition.First, sub.getOptions().getStartAt());
+					assertTrue("Did not receive our messages", waitTime(ch, 5, TimeUnit.SECONDS));
+					sleep(2000);
+					assertEquals("Got wrong number of msgs", shouldReceive, received.get());
+					assertEquals("Wrong number of msgs in map", shouldReceive, savedMsgs.size());
+					// Check we received them in order
+					synchronized(lock) {
+						Iterator<Message> it = savedMsgs.iterator();
+						long seq = 1;
+						while (it.hasNext()) {
+							Message m = it.next();
+							// Check sequence
+							assertEquals(seq, m.getSequence());
+
+							// Check payload
+							long dseq = Long.valueOf(new String(m.getData()));
+							assertEquals(seq, dseq);
+							seq++;
+						}
+					}
+				} catch (IOException | TimeoutException e) {
+					e.printStackTrace();
+					fail("Subscription error: " + e.getMessage());
+				}
+			} catch (IOException | TimeoutException e) {
+				e.printStackTrace();
+				fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
+			}
+		}
+	}
 	@Test
 	public void testUnsubscribe() {
 		try (STANServer s = runServer(clusterName, false)) {
@@ -1127,8 +1205,6 @@ public class ConnectionTest {
 				}
 				
 				assertTrue("Did not receive first delivery of all messages", waitTime(ch, 5, TimeUnit.SECONDS));
-				
-				final Channel<Boolean> rch = new Channel<Boolean>();
 				
 				assertEquals(10, received.get());
 				

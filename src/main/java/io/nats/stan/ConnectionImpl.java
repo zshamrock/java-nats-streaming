@@ -1,3 +1,10 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2016 Apcera Inc.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the MIT License (MIT)
+ * which accompanies this distribution, and is available at
+ * http://opensource.org/licenses/MIT
+ *******************************************************************************/
 package io.nats.stan;
 
 import java.io.IOException;
@@ -13,13 +20,11 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Stopwatch;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 
 //import io.nats.stan.client.*;
 import io.nats.client.Channel;
-import io.nats.client.Constants;
 import io.nats.client.Message;
 import io.nats.client.MessageHandler;
 import io.nats.client.NUID;
@@ -88,7 +93,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 		AckClosure(final String guid, final AckHandler ah) {
 			this.ah = ah;
 			this.guid = guid;
-			t = new java.util.TimerTask() {
+			this.t = new java.util.TimerTask() {
 				public void run() {
 					removeAck(guid);
 					if (ah != null) {							
@@ -128,7 +133,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 				.setClientID(opts.getClientID())
 				.setHeartbeatInbox(hbInbox)
 				.build();
-		logger.trace("ConnectRequest = [{}]", req);
+		logger.trace("Sending ConnectRequest:\n{}", req.toString().trim());
 		byte[] b = req.toByteArray();
 		Message reply = null;
 		try {
@@ -143,6 +148,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 		if (!cr.getError().isEmpty()) {
 			throw new IOException(cr.getError());
 		}
+		logger.trace("Received ConnectResponse:\n{}", cr);
 		
 		// Capture cluster configuration endpoints to publish and subscribe/unsubscribe.
 		pubPrefix = cr.getPubPrefix();
@@ -164,6 +170,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 	
 	@Override
 	public void close() throws IOException, TimeoutException {
+		logger.trace("In STAN close()");
 		io.nats.client.Connection nc = null;
 		this.lock();
 		try {
@@ -188,6 +195,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 			
 			CloseRequest req = CloseRequest.newBuilder()
 					.setClientID(opts.getClientID()).build();
+			logger.trace("CLOSE request: [{}]", req);
 			byte[] b = req.toByteArray();
 			Message reply = null;
 			try {
@@ -197,7 +205,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 			} catch (Exception e) {
 				throw e;
 			}
-			logger.trace("Close reply = [{}]", reply);
+			logger.trace("CLOSE response: [{}]", reply);
 			if (reply.getData() != null) {
 				CloseResponse cr = CloseResponse.parseFrom(reply.getData());
 				
@@ -229,6 +237,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 			PubAck pa = null;
 			try {
 				pa = PubAck.parseFrom(msg.getData());
+				logger.trace("Received PubAck:\n{}", pa);
 			} catch (InvalidProtocolBufferException e) {
 				logger.error("Error unmarshaling PubAck", e);
 			}
@@ -332,7 +341,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 		
 		try {
 			nc.publish(subj, ackSubject, b);
-			logger.trace("STAN published: {}", pe);
+			logger.trace("STAN published:\n{}", pe);
 		} catch (IOException e) {
 			removeAck(pe.getGuid());
 			throw(e);
@@ -341,7 +350,11 @@ public class ConnectionImpl implements Connection, MessageHandler {
 		// Setup the timer for expiration.
 		this.lock();
 		try {
-			ackTimer.schedule(a.t, ackTimeout);
+			if (a.t != null) {
+				ackTimer.schedule(a.t, ackTimeout);
+			} else {
+				logger.error("ackTimeout task for guid {} was NULL", a.guid);
+			}
 		} finally {
 			this.unlock();
 		}
@@ -370,9 +383,8 @@ public class ConnectionImpl implements Connection, MessageHandler {
 	
 	Subscription _subscribe(String subject, String qgroup, io.nats.stan.MessageHandler cb, SubscriptionOptions opts) throws IOException, TimeoutException {
 		SubscriptionImpl sub = new SubscriptionImpl(subject, qgroup, cb, this, opts);
-		logger.trace("In _subscribe for subject {}, qgroup {}", subject, qgroup);
+//		logger.trace("In _subscribe for subject {}, qgroup {}", subject, qgroup);
 		this.lock();
-		logger.trace("_subscribe: acquired STAN connection lock");
 		try {
 			if (nc == null) {
 				sub = null;
@@ -387,11 +399,8 @@ public class ConnectionImpl implements Connection, MessageHandler {
 		}
 		
 		// Hold lock throughout.
-		logger.trace("Trying to acquire STAN subscription lock");
 		sub.wLock();
 		try {
-			logger.trace("Acquired STAN subscription lock");
-			
 			// Listen for actual messages
 			io.nats.client.Subscription nsub = nc.subscribe(sub.inbox, this);
 			sub.inboxSub = nsub;
@@ -434,7 +443,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 			SubscriptionRequest sr = srb.build();
 			Message reply = null;
 			try {
-				logger.trace("Sending subscription request: " +  sr);
+				logger.trace("Sending SubscriptionRequest:\n{}", sr);
 				reply = nc.request(subRequests, sr.toByteArray(), 2L, TimeUnit.SECONDS);
 			} catch (TimeoutException e) {
 				throw new TimeoutException(ConnectionImpl.ERR_TIMEOUT);
@@ -444,7 +453,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 				reply.setData(new byte[0]);
 			}
 			r = SubscriptionResponse.parseFrom(reply.getData());
-			logger.trace("Received subscription response: " + r);
+			logger.trace("Received SubscriptionResponse:\n{}", r);
 			if (!r.getError().isEmpty()) {
 				throw new IOException(r.getError());
 			}
@@ -452,7 +461,6 @@ public class ConnectionImpl implements Connection, MessageHandler {
 		} finally {
 			sub.wUnlock();
 		}
-		logger.trace("Subscribed to NATS subject=[{}], local inbox=[{}]", sub.subject, sub.inbox);
 		return sub;
 	}
 
@@ -462,6 +470,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 		Exception ex = null;
 		try {
 			pa = PubAck.parseFrom(m.getData());
+			logger.trace("Processing PubAck:\n{}", pa);
 		} catch (InvalidProtocolBufferException e) {
 			System.err.println("Error unmarshaling ack message");
 		}
@@ -519,6 +528,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 
 		try {
 			msg.msgp = MsgProto.parseFrom(raw.getData());
+			logger.trace("processMsg received MsgProto:\n{}", msg.msgp);
 		} catch (InvalidProtocolBufferException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -573,6 +583,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 			Ack ack = Ack.newBuilder().setSubject(msg.getSubject()).setSequence(msg.getSequence()).build();
 			try {
 				nc.publish(ackSubject, ack.toByteArray());
+				logger.trace("processMsg published Ack:\n{}", ack);
 			} catch (IOException e) {
 				// FIXME(dlc) - Async error handler? Retry?
 				logger.error("Exception while publishing auto-ack:", e);

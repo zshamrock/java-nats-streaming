@@ -1,3 +1,10 @@
+/*******************************************************************************
+ * Copyright (c) 2015-2016 Apcera Inc.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the MIT License (MIT)
+ * which accompanies this distribution, and is available at
+ * http://opensource.org/licenses/MIT
+ *******************************************************************************/
 package io.nats.stan;
 
 import java.io.IOException;
@@ -6,7 +13,12 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class SubscriptionImpl implements Subscription {
+	static final Logger logger					= LoggerFactory.getLogger(SubscriptionImpl.class);
+	
 	static final long 	DEFAULT_ACK_WAIT		= TimeUnit.SECONDS.toMillis(30);
 	static final int 	DEFAULT_MAX_IN_FLIGHT	= 1024;
 	
@@ -58,24 +70,23 @@ public class SubscriptionImpl implements Subscription {
 		ConnectionImpl sc = null;
 		String inbox = null;
 		String reqSubject = null;
-		SubscriptionImpl sub = this;
-		sub.wLock();
+		wLock();
 		try {
-			sc = sub.sc;
+			sc = this.sc;
 			if (sc == null) {
 				// FIXME Already closed.
 				throw new IllegalStateException(ConnectionImpl.ERR_BAD_SUBSCRIPTION); 
 			}
-			sub.sc = null;
+			this.sc = null;
 			try {
-				sub.inboxSub.unsubscribe();
+				inboxSub.unsubscribe();
 			} catch (Exception e) {
 				// NOOP
 			}
-			sub.inboxSub = null;
-			inbox = sub.inbox;
+			inboxSub = null;
+			inbox = this.inbox;
 		} finally {
-			sub.wUnlock();
+			wUnlock();
 		}
 		//FIXME why do this again?
 //		if (sc == null) {
@@ -96,14 +107,16 @@ public class SubscriptionImpl implements Subscription {
 		// Send unsubscribe to server.
 		
 		// FIXME(dlc) = Add in durable?
-		byte[] b = UnsubscribeRequest.newBuilder()
+		UnsubscribeRequest usr = UnsubscribeRequest.newBuilder()
 				.setClientID(sc.opts.getClientID())
-				.setSubject(sub.subject)
-				.setInbox(sub.ackInbox)
-				.build().toByteArray();
+				.setSubject(subject)
+				.setInbox(ackInbox)
+				.build();
+		byte[] b = usr.toByteArray();
 
 		io.nats.client.Message reply = null;
 		try {
+			logger.trace("Sending UnsubscribeRequest:\n{}", usr);
 			// FIXME(dlc) - make timeout configurable.
 			reply = sc.nc.request(reqSubject,  b, 2, TimeUnit.SECONDS);
 		} catch (TimeoutException e) {
@@ -115,6 +128,7 @@ public class SubscriptionImpl implements Subscription {
 		} else {
 			r =	SubscriptionResponse.parseFrom(reply.getData());
 		}
+		logger.trace("Received Unsubscribe SubscriptionResponse:\n{}", r);
 		if (!r.getError().isEmpty()) {
 			throw new IOException("stan: " + r.getError());
 		}		
