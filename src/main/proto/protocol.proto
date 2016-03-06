@@ -14,7 +14,7 @@ package stan;
 //option (gogoproto.goproto_getters_all) = false;
 
 // Java-specific options
-option java_package = "io.nats.stan";
+option java_package = "io.nats.stan.protobuf";
 option java_multiple_files = true;
 
 //import weak "github.com/gogo/protobuf/gogoproto/gogo.proto";
