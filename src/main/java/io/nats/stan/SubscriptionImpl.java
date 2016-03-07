@@ -111,7 +111,7 @@ public class SubscriptionImpl implements Subscription {
     // Send unsubscribe to server.
 
     // FIXME(dlc) = Add in durable?
-    UnsubscribeRequest usr = UnsubscribeRequest.newBuilder().setClientID(sc.opts.getClientID())
+    UnsubscribeRequest usr = UnsubscribeRequest.newBuilder().setClientID(sc.opts.getClientId())
         .setSubject(subject).setInbox(ackInbox).build();
     byte[] bytes = usr.toByteArray();
 

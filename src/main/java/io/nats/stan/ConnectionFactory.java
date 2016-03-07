@@ -17,15 +17,15 @@ public class ConnectionFactory {
   Duration connectTimeout = Duration.ofSeconds(ConnectionImpl.DEFAULT_CONNECT_WAIT);
   String discoverPrefix = ConnectionImpl.DEFAULT_DISCOVER_PREFIX;
   int maxPubAcksInFlight = ConnectionImpl.DEFAULT_MAX_PUB_ACKS_IN_FLIGHT;
-  String natsURL = ConnectionImpl.DEFAULT_NATS_URL;
-  String clientID;
-  String clusterID;
+  String natsUrl = ConnectionImpl.DEFAULT_NATS_URL;
+  String clientId;
+  String clusterId;
 
   ConnectionFactory() {}
 
   ConnectionFactory(String clusterId, String clientId) {
-    this.clusterID = clusterId;
-    this.clientID = clientId;
+    this.clusterId = clusterId;
+    this.clientId = clientId;
   }
 
   ConnectionImpl createConnection() throws IOException, TimeoutException {
@@ -35,14 +35,9 @@ public class ConnectionFactory {
   }
 
   Options options() {
-    Options opts = new Options();
-    opts.setConnectTimeout(connectTimeout);
-    opts.setAckTimeout(ackTimeout);
-    opts.setDiscoverPrefix(discoverPrefix);
-    opts.setMaxPubAcksInFlight(maxPubAcksInFlight);
-    opts.setNatsURL(natsURL);
-    opts.setClientID(clientID);
-    opts.setClusterID(clusterID);
+    Options opts = new Options.Builder().setConnectTimeout(connectTimeout).setAckTimeout(ackTimeout)
+        .setDiscoverPrefix(discoverPrefix).setMaxPubAcksInFlight(maxPubAcksInFlight)
+        .setNatsUrl(natsUrl).setClientId(clientId).setClusterId(clusterId).create();
     return opts;
   }
 
@@ -144,17 +139,17 @@ public class ConnectionFactory {
    * 
    * @return the NATS connection URL
    */
-  public String getNatsUrl() {
-    return natsURL;
+  public String getnatsUrl() {
+    return natsUrl;
   }
 
   /**
    * Sets the NATS URL.
    * 
-   * @param natsUrl the natsURL to set
+   * @param natsUrl the natsUrl to set
    */
-  public void setNatsUrl(String natsUrl) {
-    this.natsURL = natsUrl;
+  public void setnatsUrl(String natsUrl) {
+    this.natsUrl = natsUrl;
   }
 
   /**
@@ -162,34 +157,34 @@ public class ConnectionFactory {
    * 
    * @return the client ID of the current STAN session
    */
-  public String getClientId() {
-    return clientID;
+  public String getclientId() {
+    return clientId;
   }
 
   /**
    * Sets the client ID for the current STAN session.
    * 
-   * @param clientId the clientID to set
+   * @param clientId the clientId to set
    */
-  public void setClientId(String clientId) {
-    this.clientID = clientId;
+  public void setclientId(String clientId) {
+    this.clientId = clientId;
   }
 
   /**
    * Returns the cluster ID of the current STAN session.
    * 
-   * @return the clusterID
+   * @return the clusterId
    */
-  public String getClusterId() {
-    return clusterID;
+  public String getclusterId() {
+    return clusterId;
   }
 
   /**
    * Sets the cluster ID of the current STAN session.
    * 
-   * @param clusterId the clusterID to set
+   * @param clusterId the clusterId to set
    */
-  public void setClusterId(String clusterId) {
-    this.clusterID = clusterId;
+  public void setclusterId(String clusterId) {
+    this.clusterId = clusterId;
   }
 }

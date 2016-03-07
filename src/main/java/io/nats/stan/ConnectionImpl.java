@@ -75,7 +75,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 
   final Lock mu = new ReentrantLock();
 
-  // String clientID;
+  // String ClientId;
   String serverID;
   String pubPrefix; // Publish prefix set by stan, append our subject.
   String subRequests; // Subject to send subscription requests.
@@ -118,6 +118,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 
   ConnectionImpl(Options opts) {
     this.opts = opts;
+    this.nc = opts.getNatsConn();
   }
 
   // Connect will form a connection to the STAN subsystem.
@@ -126,7 +127,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
 
     // Create a NATS connection if it doesn't exist
     if (nc == null) {
-      io.nats.client.ConnectionFactory cf = new io.nats.client.ConnectionFactory(opts.getNatsURL());
+      io.nats.client.ConnectionFactory cf = new io.nats.client.ConnectionFactory(opts.getNatsUrl());
       nc = cf.createConnection();
     }
 
@@ -135,8 +136,8 @@ public class ConnectionImpl implements Connection, MessageHandler {
     hbSubscription = nc.subscribe(hbInbox, processHeartBeat);
 
     // Send Request to discover the cluster
-    String discoverSubject = String.format("%s.%s", opts.getDiscoverPrefix(), opts.getClusterID());
-    ConnectRequest req = ConnectRequest.newBuilder().setClientID(opts.getClientID())
+    String discoverSubject = String.format("%s.%s", opts.getDiscoverPrefix(), opts.getClusterId());
+    ConnectRequest req = ConnectRequest.newBuilder().setClientID(opts.getClientId())
         .setHeartbeatInbox(hbInbox).build();
     logger.trace("Sending ConnectRequest:\n{}", req.toString().trim());
     byte[] bytes = req.toByteArray();
@@ -199,7 +200,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
         }
       }
 
-      CloseRequest req = CloseRequest.newBuilder().setClientID(opts.getClientID()).build();
+      CloseRequest req = CloseRequest.newBuilder().setClientID(opts.getClientId()).build();
       logger.trace("CLOSE request: [{}]", req);
       byte[] bytes = req.toByteArray();
       Message reply = null;
@@ -315,7 +316,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
         throw new IllegalStateException(ERR_CONNECTION_CLOSED);
       }
       subj = String.format("%s.%s", pubPrefix, subject);
-      PubMsg.Builder pb = PubMsg.newBuilder().setClientID(opts.getClientID())
+      PubMsg.Builder pb = PubMsg.newBuilder().setClientID(opts.getClientId())
           .setGuid(NUID.nextGlobal()).setSubject(subject);
       if (reply != null) {
         pb = pb.setReply(reply);
@@ -423,7 +424,7 @@ public class ConnectionImpl implements Connection, MessageHandler {
       // Create a subscription request
       // FIXME(dlc) add others.
       SubscriptionRequest.Builder srb =
-          SubscriptionRequest.newBuilder().setClientID(this.opts.getClientID()).setSubject(subject)
+          SubscriptionRequest.newBuilder().setClientID(this.opts.getClientId()).setSubject(subject)
               .setQGroup(qgroup == null ? "" : qgroup).setInbox(sub.inbox)
               .setMaxInFlight(sub.getOptions().maxInFlight)
               .setAckWaitInSecs((int) sub.getOptions().getAckWait().getSeconds());
@@ -480,13 +481,14 @@ public class ConnectionImpl implements Connection, MessageHandler {
 
   // Process an ack from the STAN cluster
   protected void processAck(Message msg) {
+    logger.info("In processAck()");
     PubAck pa = null;
     Exception ex = null;
     try {
       pa = PubAck.parseFrom(msg.getData());
       logger.trace("Processing PubAck:\n{}", pa);
     } catch (InvalidProtocolBufferException e) {
-      System.err.println("Error unmarshaling ack message");
+      logger.error("Error unmarshaling ack message", e);
     }
 
     // Remove

@@ -9,76 +9,110 @@ package io.nats.stan;
 import java.time.Duration;
 
 public class Options {
-  private String natsURL = ConnectionImpl.DEFAULT_NATS_URL;
+  private String natsUrl;
   private io.nats.client.Connection natsConn;
   private Duration connectTimeout; // milliseconds
   private Duration ackTimeout; // milliseconds
   private String discoverPrefix;
   private int maxPubAcksInFlight;
-  private String clientID;
-  private String clusterID;
+  private String clientId;
+  private String clusterId;
 
-  String getNatsURL() {
-    return natsURL;
+  Options(Builder builder) {
+    this.natsUrl = builder.natsUrl;
+    this.natsConn = builder.natsConn;
+    this.connectTimeout = builder.connectTimeout;
+    this.ackTimeout = builder.ackTimeout;
+    this.discoverPrefix = builder.discoverPrefix;
+    this.maxPubAcksInFlight = builder.maxPubAcksInFlight;
+    this.clientId = builder.clientId;
+    this.clusterId = builder.clusterId;
   }
 
-  void setNatsURL(String natsURL) {
-    this.natsURL = natsURL;
+  String getNatsUrl() {
+    return natsUrl;
   }
 
   io.nats.client.Connection getNatsConn() {
     return natsConn;
   }
 
-  void setNatsConn(io.nats.client.Connection natsConn) {
-    this.natsConn = natsConn;
-  }
-
   Duration getConnectTimeout() {
     return connectTimeout;
-  }
-
-  void setConnectTimeout(Duration connectTimeout) {
-    this.connectTimeout = connectTimeout;
   }
 
   Duration getAckTimeout() {
     return ackTimeout;
   }
 
-  void setAckTimeout(Duration ackTimeout) {
-    this.ackTimeout = ackTimeout;
-  }
-
   String getDiscoverPrefix() {
     return discoverPrefix;
-  }
-
-  void setDiscoverPrefix(String discoverPrefix) {
-    this.discoverPrefix = discoverPrefix;
   }
 
   int getMaxPubAcksInFlight() {
     return maxPubAcksInFlight;
   }
 
-  void setMaxPubAcksInFlight(int maxPubAcksInFlight) {
-    this.maxPubAcksInFlight = maxPubAcksInFlight;
+  String getClientId() {
+    return clientId;
   }
 
-  String getClientID() {
-    return clientID;
+  String getClusterId() {
+    return clusterId;
   }
 
-  void setClientID(String clientID) {
-    this.clientID = clientID;
-  }
+  public static final class Builder {
+    private String natsUrl = ConnectionImpl.DEFAULT_NATS_URL;
+    private io.nats.client.Connection natsConn;
+    private Duration connectTimeout; // milliseconds
+    private Duration ackTimeout; // milliseconds
+    private String discoverPrefix;
+    private int maxPubAcksInFlight;
+    private String clientId;
+    private String clusterId;
 
-  String getClusterID() {
-    return clusterID;
-  }
+    public Builder setAckTimeout(Duration ackTimeout) {
+      this.ackTimeout = ackTimeout;
+      return this;
+    }
 
-  void setClusterID(String clusterID) {
-    this.clusterID = clusterID;
+    public Builder setClientId(String clientId) {
+      this.clientId = clientId;
+      return this;
+    }
+
+    public Builder setClusterId(String clusterId) {
+      this.clusterId = clusterId;
+      return this;
+    }
+
+    public Builder setConnectTimeout(Duration connectTimeout) {
+      this.connectTimeout = connectTimeout;
+      return this;
+    }
+
+    public Builder setDiscoverPrefix(String discoverPrefix) {
+      this.discoverPrefix = discoverPrefix;
+      return this;
+    }
+
+    public Builder setMaxPubAcksInFlight(int maxPubAcksInFlight) {
+      this.maxPubAcksInFlight = maxPubAcksInFlight;
+      return this;
+    }
+
+    public Builder setNatsConn(io.nats.client.Connection natsConn) {
+      this.natsConn = natsConn;
+      return this;
+    }
+
+    public Builder setNatsUrl(String natsUrl) {
+      this.natsUrl = natsUrl;
+      return this;
+    }
+
+    public Options create() {
+      return new Options(this);
+    }
   }
 }
