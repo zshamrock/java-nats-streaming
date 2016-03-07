@@ -98,7 +98,7 @@ public class ConnectionTest {
       final long connectTime = 25;
       Stopwatch st = Stopwatch.createStarted();
       try (Connection c =
-          new ConnectionFactory("someNonExistantServerID", "myTestClient").createConnection()) {
+          new ConnectionFactory("someNonExistentServerID", "myTestClient").createConnection()) {
         fail("Should not have connected.");
       } catch (IOException | TimeoutException e) {
         // e.printStackTrace();
@@ -469,22 +469,32 @@ public class ConnectionTest {
 
   @Test
   public void testSubscriptionStartPositionLast() {
-    try (STANServer s = runServer(clusterName, false)) {
+    try (STANServer s = runServer(clusterName)) {
       ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
       try (Connection sc = cf.createConnection()) {
+        int toSend = 10;
+        final AtomicInteger received = new AtomicInteger(0);
+        final List<Message> savedMsgs = new ArrayList<Message>();
+
         // Publish ten messages
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < toSend; i++) {
           sc.publish("foo", String.format("%d", i).getBytes());
         }
+
+        // Sleep a little to let the messages get stored/acked
+        sleep(10);
 
         // Now subscribe and set start position to last received.
         final Channel<Boolean> ch = new Channel<Boolean>();
         MessageHandler mcb = new MessageHandler() {
           public void onMessage(Message msg) {
+            received.incrementAndGet();
+            savedMsgs.add(msg);
             System.err.println(msg);
             ch.add(true);
           }
         };
+
         SubscriptionOptions opts =
             new SubscriptionOptions.Builder().startWithLastReceived().build();
 
@@ -494,6 +504,19 @@ public class ConnectionTest {
 
           // Make sure we got our message
           assertTrue("Did not receive our message", waitTime(ch, 5, TimeUnit.SECONDS));
+          if (received.get() != 1) {
+            System.err.printf(
+                "Should have received 1 message with sequence %d, but got these %d messages:\n",
+                toSend, savedMsgs.size());
+            Iterator<Message> it = savedMsgs.iterator();
+            while (it.hasNext()) {
+              System.err.println(it.next());
+            }
+            fail("Wrong number of messages");
+          }
+          assertEquals("Wrong message sequence received,", toSend, savedMsgs.get(0).getSequence());
+
+          assertEquals(1, savedMsgs.size());
           assertEquals(0, ch.getCount());
 
         } catch (IOException | TimeoutException e) {
@@ -942,7 +965,7 @@ public class ConnectionTest {
   }
 
   @Test
-  public void testDupClientID() {
+  public void testDupClientId() {
     try (STANServer s = runServer(clusterName, false)) {
       ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
       boolean exThrown = false;
@@ -1448,26 +1471,21 @@ public class ConnectionTest {
 
   @Test
   public void testPubMultiQueueSubWithRedelivery() {
-    try (STANServer s = runServer(clusterName, true)) {
+    try (STANServer s = runServer(clusterName, false)) {
       ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
       try (Connection sc = cf.createConnection()) {
         final Channel<Boolean> ch = new Channel<Boolean>();
         final AtomicInteger received = new AtomicInteger(0);
         final AtomicInteger s1Received = new AtomicInteger(0);
-        final int toSend = 50;
+        final int toSend = 500;
         final Subscription[] subs = new Subscription[2];
 
         MessageHandler mcb = new MessageHandler() {
           public void onMessage(Message msg) {
-            // TODO remove this
-            // long id = Thread.currentThread().getId();
-
             // Track received for each receiver
             if (msg.getSubscription().equals(subs[0])) {
               try {
                 msg.ack();
-                // System.err.printf("ThreadID %d Acked: %s\n",
-                // id, m);
               } catch (Exception e) {
                 // NOOP
                 e.printStackTrace();
@@ -1500,6 +1518,82 @@ public class ConnectionTest {
 
             assertTrue("Did not receive all our messages", waitTime(ch, 30, TimeUnit.SECONDS));
             assertEquals("Did not receive correct number of messages:", toSend, received.get());
+
+            // Since we never ack'd sub2, we should receive all our messages on sub1
+            assertEquals("Sub1 received wrong number of messages", toSend, s1Received.get());
+          } catch (Exception e) {
+            e.printStackTrace();
+            fail("Subscription s2 failed: " + e.getMessage());
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
+          fail("Subscription s1 failed: " + e.getMessage());
+        }
+      } catch (IOException | TimeoutException e) {
+        e.printStackTrace();
+        fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
+      }
+    }
+  }
+
+  @Test
+  public void testPubMultiQueueSubWithDelayRedelivery() {
+    try (STANServer s = runServer(clusterName, false)) {
+      ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
+      try (Connection sc = cf.createConnection()) {
+        final Channel<Boolean> ch = new Channel<Boolean>();
+        final AtomicInteger ackCount = new AtomicInteger(0);
+        final int toSend = 500;
+        final Subscription[] subs = new Subscription[2];
+
+        MessageHandler mcb = new MessageHandler() {
+          public void onMessage(Message msg) {
+            // Track received for each receiver
+            if (msg.getSubscription().equals(subs[0])) {
+              try {
+                msg.ack();
+              } catch (Exception e) {
+                e.printStackTrace();
+                fail(e.getMessage());
+              }
+              int nr = ackCount.incrementAndGet();
+
+              if (nr == toSend) {
+                ch.add(true);
+              }
+
+              if (nr > 0 && nr % (toSend / 2) == 0) {
+                // This depends on the internal algorithm where the
+                // best resend subscriber is the one with the least number
+                // of outstanding acks.
+                //
+                // Sleep to allow the acks to back up, so s2 will look
+                // like a better subscriber to send messages to.
+                sleep(200, TimeUnit.MILLISECONDS);
+              }
+            } else if (msg.getSubscription().equals(subs[1])) {
+              // We will not ack this subscriber
+            } else {
+              fail("Received message on unknown subscription");
+            }
+          }
+        };
+
+        try (Subscription s1 = sc.subscribe("foo", "bar", mcb,
+            new SubscriptionOptions.Builder().setManualAcks(true).build())) {
+          try (Subscription s2 = sc.subscribe("foo", "bar", mcb, new SubscriptionOptions.Builder()
+              .setManualAcks(true).setAckWait(1, TimeUnit.SECONDS).build())) {
+            subs[0] = s1;
+            subs[1] = s2;
+            // Publish out the messages.
+            for (int i = 0; i < toSend; i++) {
+              byte[] data = String.format("%d", i).getBytes();
+              sc.publish("foo", data);
+            }
+
+            assertTrue("Did not ack expected count of messages",
+                waitTime(ch, 30, TimeUnit.SECONDS));
+            assertEquals("Did not ack correct number of messages", toSend, ackCount.get());
           } catch (Exception e) {
             e.printStackTrace();
             fail("Subscription s2 failed: " + e.getMessage());
@@ -1595,8 +1689,9 @@ public class ConnectionTest {
     while (true) {
       System.err.printf("#\n# Run %d\n#\n", ++idx);
       try {
-        // t.testSubscriptionStartAtFirst();
-        test.testPubMultiQueueSubWithRedelivery();
+        test.testSubscriptionStartPositionLast();
+        // test.testSubscriptionStartAtFirst();
+        // test.testPubMultiQueueSubWithRedelivery();
         sleep(1000);
       } catch (Throwable e) {
         e.printStackTrace();
