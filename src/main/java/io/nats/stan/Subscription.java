@@ -21,22 +21,22 @@ import java.util.concurrent.TimeoutException;
  *
  */
 public interface Subscription extends AutoCloseable {
-  /**
-   * Removes interest in the {@code Subscription} object's subject immediately.
-   * 
-   * @throws IOException if an error occurs while notifying the server
-   * @throws TimeoutException if the unsubscribe request times out without a response
-   */
-  void unsubscribe() throws IOException, TimeoutException;
+    /**
+     * Removes interest in the {@code Subscription} object's subject immediately.
+     * 
+     * @throws IOException if an error occurs while notifying the server
+     * @throws TimeoutException if the unsubscribe request times out without a response
+     */
+    void unsubscribe() throws IOException, TimeoutException;
 
-  /**
-   * Removes interest in the {@code Subscription}'s subject immediately.
-   * 
-   * @see io.nats.client.Subscription#close()
-   * @see java.lang.AutoCloseable#close()
-   */
-  void close();
+    /**
+     * Removes interest in the {@code Subscription}'s subject immediately.
+     * 
+     * @see io.nats.client.Subscription#close()
+     * @see java.lang.AutoCloseable#close()
+     */
+    void close();
 
-  SubscriptionOptions getOptions();
+    SubscriptionOptions getOptions();
 }
 
