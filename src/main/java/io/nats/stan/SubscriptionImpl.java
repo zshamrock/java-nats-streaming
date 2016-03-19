@@ -64,6 +64,30 @@ class SubscriptionImpl implements Subscription {
         rwlock.writeLock().unlock();
     }
 
+    protected String getAckInbox() {
+        return this.ackInbox;
+    }
+
+    protected ConnectionImpl getConnection() {
+        return this.sc;
+    }
+
+    protected String getInbox() {
+        return this.inbox;
+    }
+
+    protected MessageHandler getMessageHandler() {
+        return this.cb;
+    }
+
+    protected String getQueue() {
+        return this.qgroup;
+    }
+
+    protected String getSubject() {
+        return this.subject;
+    }
+
     @Override
     public SubscriptionOptions getOptions() {
         return this.opts;
@@ -83,9 +107,11 @@ class SubscriptionImpl implements Subscription {
             }
             this.sc = null;
             try {
-                inboxSub.unsubscribe();
+                if (inboxSub != null) {
+                    inboxSub.unsubscribe();
+                }
             } catch (Exception e) {
-                // NOOP
+                logger.warn("stan: encountered exception unsubscribing from inbox", e);
             }
             inboxSub = null;
             inbox = this.inbox;
@@ -123,12 +149,7 @@ class SubscriptionImpl implements Subscription {
         } catch (TimeoutException e) {
             throw new TimeoutException(ConnectionImpl.ERR_TIMEOUT);
         }
-        SubscriptionResponse response = null;
-        if (reply.getData() == null) {
-            response = SubscriptionResponse.parseFrom(new byte[0]);
-        } else {
-            response = SubscriptionResponse.parseFrom(reply.getData());
-        }
+        SubscriptionResponse response = SubscriptionResponse.parseFrom(reply.getData());
         logger.trace("Received Unsubscribe SubscriptionResponse:\n{}", response);
         if (!response.getError().isEmpty()) {
             throw new IOException("stan: " + response.getError());
@@ -137,10 +158,19 @@ class SubscriptionImpl implements Subscription {
 
     @Override
     public void close() {
+        if (this.sc == null) {
+            // already closed
+            return;
+        }
         try {
             unsubscribe();
         } catch (Exception e) {
-            // NOOP
+            logger.warn("stan: exception during unsubscribe for subject {}", this.subject);
+            logger.debug("Stack trace: ", e);
         }
+    }
+
+    protected void setAckInbox(String ackInbox) {
+        this.ackInbox = ackInbox;
     }
 }

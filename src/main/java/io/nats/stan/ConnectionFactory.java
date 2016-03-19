@@ -6,19 +6,22 @@
 
 package io.nats.stan;
 
+import io.nats.client.Connection;
+
 import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class ConnectionFactory {
-    Duration ackTimeout = Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT);
-    Duration connectTimeout = Duration.ofSeconds(ConnectionImpl.DEFAULT_CONNECT_WAIT);
-    String discoverPrefix = ConnectionImpl.DEFAULT_DISCOVER_PREFIX;
-    int maxPubAcksInFlight = ConnectionImpl.DEFAULT_MAX_PUB_ACKS_IN_FLIGHT;
-    String natsUrl = ConnectionImpl.DEFAULT_NATS_URL;
-    String clientId;
-    String clusterId;
+    private Duration ackTimeout = Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT);
+    private Duration connectTimeout = Duration.ofSeconds(ConnectionImpl.DEFAULT_CONNECT_WAIT);
+    private String discoverPrefix = ConnectionImpl.DEFAULT_DISCOVER_PREFIX;
+    private int maxPubAcksInFlight = ConnectionImpl.DEFAULT_MAX_PUB_ACKS_IN_FLIGHT;
+    private String natsUrl = ConnectionImpl.DEFAULT_NATS_URL;
+    private Connection natsConn;
+    private String clientId;
+    private String clusterId;
 
     ConnectionFactory() {}
 
@@ -34,9 +37,10 @@ public class ConnectionFactory {
     }
 
     Options options() {
-        Options opts = new Options.Builder().setConnectTimeout(connectTimeout)
-                .setAckTimeout(ackTimeout).setDiscoverPrefix(discoverPrefix)
-                .setMaxPubAcksInFlight(maxPubAcksInFlight).setNatsUrl(natsUrl).create();
+        Options opts =
+                new Options.Builder().setConnectTimeout(connectTimeout).setAckTimeout(ackTimeout)
+                        .setDiscoverPrefix(discoverPrefix).setMaxPubAcksInFlight(maxPubAcksInFlight)
+                        .setNatsConn(natsConn).setNatsUrl(natsUrl).create();
         return opts;
     }
 
@@ -112,6 +116,9 @@ public class ConnectionFactory {
      * @param discoverPrefix the discoverPrefix to set
      */
     public void setDiscoverPrefix(String discoverPrefix) {
+        if (discoverPrefix == null) {
+            throw new NullPointerException("stan: discoverPrefix must be non-null");
+        }
         this.discoverPrefix = discoverPrefix;
     }
 
@@ -130,6 +137,9 @@ public class ConnectionFactory {
      * @param maxPubAcksInFlight the maxPubAcksInFlight to set
      */
     public void setMaxPubAcksInFlight(int maxPubAcksInFlight) {
+        if (maxPubAcksInFlight < 0) {
+            throw new IllegalArgumentException("stan: max publish acks in flight must be >= 0");
+        }
         this.maxPubAcksInFlight = maxPubAcksInFlight;
     }
 
@@ -138,7 +148,7 @@ public class ConnectionFactory {
      * 
      * @return the NATS connection URL
      */
-    public String getnatsUrl() {
+    public String getNatsUrl() {
         return natsUrl;
     }
 
@@ -147,16 +157,38 @@ public class ConnectionFactory {
      * 
      * @param natsUrl the natsUrl to set
      */
-    public void setnatsUrl(String natsUrl) {
+    public void setNatsUrl(String natsUrl) {
+        if (natsUrl == null) {
+            throw new NullPointerException("stan: NATS URL must be non-null");
+        }
         this.natsUrl = natsUrl;
     }
+
+    /**
+     * Returns the NATS Connection, if set.
+     * 
+     * @return the NATS Connection
+     */
+    public io.nats.client.Connection getNatsConnection() {
+        return this.natsConn;
+    }
+
+    /**
+     * Sets the NATS Connection.
+     * 
+     * @param natsConn the NATS connection to set
+     */
+    public void setNatsConnection(io.nats.client.Connection natsConn) {
+        this.natsConn = natsConn;
+    }
+
 
     /**
      * Returns the client ID of the current STAN session.
      * 
      * @return the client ID of the current STAN session
      */
-    public String getclientId() {
+    public String getClientId() {
         return clientId;
     }
 
@@ -165,7 +197,10 @@ public class ConnectionFactory {
      * 
      * @param clientId the clientId to set
      */
-    public void setclientId(String clientId) {
+    public void setClientId(String clientId) {
+        if (clientId == null) {
+            throw new NullPointerException("stan: client ID must be non-null");
+        }
         this.clientId = clientId;
     }
 
@@ -174,7 +209,7 @@ public class ConnectionFactory {
      * 
      * @return the clusterId
      */
-    public String getclusterId() {
+    public String getClusterId() {
         return clusterId;
     }
 
@@ -183,7 +218,11 @@ public class ConnectionFactory {
      * 
      * @param clusterId the clusterId to set
      */
-    public void setclusterId(String clusterId) {
+    public void setClusterId(String clusterId) {
+        if (clusterId == null) {
+            throw new NullPointerException("stan: cluster ID must be non-null");
+        }
+
         this.clusterId = clusterId;
     }
 }

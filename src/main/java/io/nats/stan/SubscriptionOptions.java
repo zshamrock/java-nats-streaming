@@ -8,14 +8,21 @@ package io.nats.stan;
 
 import io.nats.stan.protobuf.StartPosition;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 /**
- *
+ * A SubscriptionOptions object defines the configurable parameters of a STAN Subscription object.
  */
 public class SubscriptionOptions {
+
+    static final Logger logger = LoggerFactory.getLogger(SubscriptionOptions.class);
+
     // DurableName, if set will survive client restarts.
     String durableName;
     // Controls the number of messages the cluster will have inflight without an ACK.
@@ -27,11 +34,11 @@ public class SubscriptionOptions {
     // Optional start sequence number.
     long startSequence;
     // Optional start time in nanoseconds since the UNIX epoch.
-    long startTime;
+    Instant startTime;
     // Option to do Manual Acks
     boolean manualAcks;
 
-    Date startTimeAsDate;
+    // Date startTimeAsDate;
 
     private SubscriptionOptions(Builder builder) {
         this.durableName = builder.durableName;
@@ -95,11 +102,8 @@ public class SubscriptionOptions {
      * 
      * @return the desired start time position
      */
-    public Date getStartTime() {
-        if (startTimeAsDate == null) {
-            startTimeAsDate = new Date(getStartTime(TimeUnit.MILLISECONDS));
-        }
-        return startTimeAsDate;
+    public Instant getStartTime() {
+        return startTime;
     }
 
     /**
@@ -109,7 +113,10 @@ public class SubscriptionOptions {
      * @return the desired start time position
      */
     public long getStartTime(TimeUnit unit) {
-        return unit.convert(startTime, TimeUnit.NANOSECONDS);
+        // FIXME use BigInteger representation
+        long totalNanos = TimeUnit.SECONDS.toNanos(startTime.getEpochSecond());
+        totalNanos += startTime.getNano();
+        return unit.convert(totalNanos, TimeUnit.NANOSECONDS);
     }
 
     /**
@@ -127,9 +134,9 @@ public class SubscriptionOptions {
         String durableName;
         int maxInFlight = SubscriptionImpl.DEFAULT_MAX_IN_FLIGHT;
         Duration ackWait = Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT);
-        StartPosition startAt;
+        StartPosition startAt = StartPosition.NewOnly;
         long startSequence;
-        long startTime;
+        Instant startTime;
         boolean manualAcks;
         Date startTimeAsDate;
 
@@ -203,14 +210,14 @@ public class SubscriptionOptions {
         }
 
         /**
-         * Specifies the desired start time position using {@code java.util.Date}.
+         * Specifies the desired start time position using {@code java.time.Instant}.
          * 
-         * @param start the desired start time position expressed as a {@code java.util.Date}
+         * @param start the desired start time position expressed as a {@code java.time.Instant}
          * @return this
          */
-        public Builder startAtTime(Date start) {
+        public Builder startAtTime(Instant start) {
             this.startAt = StartPosition.TimeDeltaStart;
-            this.startTime = TimeUnit.MILLISECONDS.toNanos(start.getTime());
+            this.startTime = start;
             return this;
         }
 
@@ -223,8 +230,23 @@ public class SubscriptionOptions {
          */
         public Builder startAtTimeDelta(long ago, TimeUnit unit) {
             this.startAt = StartPosition.TimeDeltaStart;
-            this.startTime =
-                    TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis() - unit.toMillis(ago));
+            // this.startTime =
+            // TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis() - unit.toMillis(ago));
+            this.startTime = Instant.now().minusNanos(unit.toNanos(ago));
+            return this;
+        }
+
+        /**
+         * Specifies the desired delta start time as a {@link java.time.Duration}.
+         * 
+         * @param ago the historical time delta (from now) from which to start receiving messages
+         * @return this
+         */
+        public Builder startAtTimeDelta(Duration ago) {
+            this.startAt = StartPosition.TimeDeltaStart;
+            // this.startTime =
+            // TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis() - unit.toMillis(ago));
+            this.startTime = Instant.now().minusNanos(ago.toNanos());
             return this;
         }
 
@@ -259,5 +281,16 @@ public class SubscriptionOptions {
             return new SubscriptionOptions(this);
         }
     }
+
+    // static BigInteger toBigInteger(Instant instant) {
+    // BigInteger result = null;
+    // BigInteger resultNanos = null;
+    // long nanos = TimeUnit.SECONDS.toNanos(instant.getLong(ChronoField.INSTANT_SECONDS));
+    // result = new BigInteger(Long.toUnsignedString(nanos));
+    // resultNanos =
+    // new BigInteger(Long.toUnsignedString(instant.getLong(ChronoField.NANO_OF_SECOND)));
+    // result = result.add(resultNanos);
+    // return result;
+    // }
 }
 

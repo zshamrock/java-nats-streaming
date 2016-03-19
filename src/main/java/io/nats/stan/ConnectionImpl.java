@@ -29,6 +29,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
@@ -38,7 +40,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-class ConnectionImpl implements Connection, MessageHandler {
+class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     static final String DEFAULT_NATS_URL = io.nats.client.ConnectionFactory.DEFAULT_URL;
     static final int DEFAULT_CONNECT_WAIT = 2; // Seconds
@@ -84,7 +86,10 @@ class ConnectionImpl implements Connection, MessageHandler {
     String closeRequests; // Subject to send close requests.
     String ackSubject; // publish acks
     io.nats.client.Subscription ackSubscription;
+    String hbInbox;
     io.nats.client.Subscription hbSubscription;
+    io.nats.client.MessageHandler hbCallback;
+
     Map<String, Subscription> subMap;
     Map<String, AckClosure> pubAckMap;
     Channel<PubAck> pubAckChan;
@@ -93,8 +98,12 @@ class ConnectionImpl implements Connection, MessageHandler {
 
     Timer ackTimer = new Timer(true);
 
+    protected ConnectionImpl() {
+
+    }
+
     ConnectionImpl(String stanClusterId, String clientId) {
-        this(stanClusterId, clientId, null);
+        this(stanClusterId, clientId, new Options.Builder().create());
     }
 
     ConnectionImpl(String stanClusterId, String clientId, Options opts) {
@@ -110,18 +119,18 @@ class ConnectionImpl implements Connection, MessageHandler {
 
         // Create a NATS connection if it doesn't exist
         if (nc == null) {
-            io.nats.client.ConnectionFactory cf =
-                    new io.nats.client.ConnectionFactory(opts.getNatsUrl());
-            nc = cf.createConnection();
+            nc = createNatsConnection();
         }
 
         // Create a heartbeat inbox
-        String hbInbox = nc.newInbox();
-        hbSubscription = nc.subscribe(hbInbox, new MessageHandler() {
+        hbInbox = nc.newInbox();
+        hbCallback = new MessageHandler() {
+            @Override
             public void onMessage(Message msg) {
                 processHeartBeat(msg);
             }
-        });
+        };
+        hbSubscription = nc.subscribe(hbInbox, hbCallback);
 
         // Send Request to discover the cluster
         String discoverSubject = String.format("%s.%s", opts.getDiscoverPrefix(), clusterId);
@@ -140,6 +149,8 @@ class ConnectionImpl implements Connection, MessageHandler {
 
         ConnectResponse cr = ConnectResponse.parseFrom(reply.getData());
         if (!cr.getError().isEmpty()) {
+            // This is already a properly formatted stan error message
+            // (ConnectionImpl.SERVER_ERR_INVALID_CLIENT)
             throw new IOException(cr.getError());
         }
         logger.trace("Received ConnectResponse:\n{}", cr);
@@ -154,7 +165,7 @@ class ConnectionImpl implements Connection, MessageHandler {
         // Setup the ACK subscription
         ackSubject = String.format("%s.%s", DEFAULT_ACK_PREFIX, NUID.nextGlobal());
         ackSubscription = nc.subscribe(ackSubject, new MessageHandler() {
-            public void onMessage(Message msg) {
+            public void onMessage(io.nats.client.Message msg) {
                 processAck(msg);
             }
         });
@@ -167,6 +178,21 @@ class ConnectionImpl implements Connection, MessageHandler {
         pubAckChan = new Channel<PubAck>(opts.getMaxPubAcksInFlight());
     }
 
+    io.nats.client.ConnectionFactory createNatsConnectionFactory() {
+        io.nats.client.ConnectionFactory cf = new io.nats.client.ConnectionFactory();
+        if (opts.getNatsUrl() != null) {
+            cf.setUrl(opts.getNatsUrl());
+        }
+        return cf;
+    }
+
+    io.nats.client.Connection createNatsConnection() throws IOException, TimeoutException {
+        if (nc == null) {
+            nc = createNatsConnectionFactory().createConnection();
+        }
+        return nc;
+    }
+
     @Override
     public void close() throws IOException, TimeoutException {
         logger.trace("In STAN close()");
@@ -174,7 +200,9 @@ class ConnectionImpl implements Connection, MessageHandler {
         this.lock();
         try {
             if (this.nc == null) {
-                throw new IllegalStateException(ConnectionImpl.ERR_CONNECTION_CLOSED);
+                // throw new IllegalStateException(ERR_CONNECTION_CLOSED);
+                logger.warn("stan: NATS connection already closed");
+                return;
             }
 
             // Capture for NATS calls below
@@ -184,11 +212,12 @@ class ConnectionImpl implements Connection, MessageHandler {
             this.nc = null;
 
             // Now close ourselves.
-            if (ackSubscription != null) {
+            if (getAckSubscription() != null) {
                 try {
-                    ackSubscription.unsubscribe();
+                    getAckSubscription().unsubscribe();
                 } catch (Exception e) {
-                    // NOOP
+                    logger.warn("stan: error unsubscribing from acks during connection close");
+                    logger.debug("Full stack trace: ", e);
                 }
             }
 
@@ -210,6 +239,8 @@ class ConnectionImpl implements Connection, MessageHandler {
                 if (!cr.getError().isEmpty()) {
                     throw new IOException(cr.getError());
                 }
+            } else {
+                logger.warn("stan: CloseResponse was null");
             }
         } finally {
             if (nc != null) {
@@ -219,12 +250,33 @@ class ConnectionImpl implements Connection, MessageHandler {
         }
     }
 
+    protected AckClosure createAckClosure(String guid, AckHandler ah) {
+        return new AckClosure(guid, ah);
+    }
+
+    TimerTask createAckTimerTask(String guid, AckHandler ah) {
+        TimerTask task = new java.util.TimerTask() {
+            public void run() {
+                processAckTimeout(guid, ah);
+            }
+        };
+        return task;
+    }
+
+    protected SubscriptionImpl createSubscription(String subject, String qgroup,
+            io.nats.stan.MessageHandler cb, ConnectionImpl conn, SubscriptionOptions opts) {
+        SubscriptionImpl sub = new SubscriptionImpl(subject, qgroup, cb, conn, opts);
+        return sub;
+    }
+
     protected void processHeartBeat(Message msg) {
         // No payload assumed, just reply
         try {
+            System.err.println("Responding to HB");
             nc.publish(msg.getReplyTo(), null);
         } catch (IOException e) {
-            logger.error(e.getMessage(), e);
+            logger.warn("stan: error publishing heartbeat response: {}", e.getMessage());
+            logger.debug("Full stack trace:", e);
         }
     }
 
@@ -247,15 +299,22 @@ class ConnectionImpl implements Connection, MessageHandler {
     @Override
     public void publish(String subject, String reply, byte[] data) throws IOException {
         // FIXME(dlc) Pool?
-        final Channel<Exception> ch = new Channel<Exception>();
+        final Channel<Exception> ech = new Channel<Exception>();
+        final Channel<String> ch = new Channel<String>();
+
         AckHandler ah = new AckHandler() {
             public void onAck(String guid, Exception ex) {
-                ch.add(ex);
+                // System.err.println("onAck invoked");
+                if (ex != null) {
+                    ech.add(ex);
+                }
+                ch.add(guid);
             }
         };
         publish(subject, reply, data, ah);
-        if (ch.getCount() != 0) {
-            throw new IOException(ch.get());
+        ch.get();
+        if (ech.getCount() != 0) {
+            throw new IOException(ech.get());
         }
     }
 
@@ -271,6 +330,7 @@ class ConnectionImpl implements Connection, MessageHandler {
         Channel<PubAck> pac;
         final AckClosure a;
         final PubMsg pe;
+        String guid;
         byte[] bytes;
         this.lock();
         try {
@@ -278,8 +338,9 @@ class ConnectionImpl implements Connection, MessageHandler {
                 throw new IllegalStateException(ERR_CONNECTION_CLOSED);
             }
             subj = String.format("%s.%s", pubPrefix, subject);
-            PubMsg.Builder pb = PubMsg.newBuilder().setClientID(clientId).setGuid(NUID.nextGlobal())
-                    .setSubject(subject);
+            guid = NUID.nextGlobal();
+            PubMsg.Builder pb =
+                    PubMsg.newBuilder().setClientID(clientId).setGuid(guid).setSubject(subject);
             if (reply != null) {
                 pb = pb.setReply(reply);
             }
@@ -287,12 +348,12 @@ class ConnectionImpl implements Connection, MessageHandler {
                 pb = pb.setData(ByteString.copyFrom(data));
             }
             pe = pb.build();
-
             bytes = pe.toByteArray();
-            a = new AckClosure(pe.getGuid(), ah);
+            a = createAckClosure(guid, ah);
 
             // Map ack to nuid
-            pubAckMap.put(pe.getGuid(), a);
+            pubAckMap.put(guid, a);
+
             // snapshot
             ackSubject = this.ackSubject;
             ackTimeout = opts.getAckTimeout();
@@ -302,73 +363,71 @@ class ConnectionImpl implements Connection, MessageHandler {
         }
         // Use the buffered channel to control the number of outstanding acks.
         try {
-            boolean success = pac.add(PubAck.getDefaultInstance(), opts.getAckTimeout().toMillis(),
-                    TimeUnit.MILLISECONDS);
-            if (!success) {
-                logger.error("Failed to add ack token to buffered channel, count={}",
-                        pac.getCount());
-            }
-        } catch (InterruptedException e) {
-            logger.error("stan: interrupted while adding ack to flow control channel", e);
+            pac.put(PubAck.getDefaultInstance());
+        } catch (InterruptedException e1) {
+            logger.warn("stan: interrupted while writing to publish ack channel");
         }
+        // if (!success) {
+        // logger.error("Failed to add ack token to buffered channel, count={}", pac.getCount());
+        // }
 
         try {
             nc.publish(subj, ackSubject, bytes);
             logger.trace("STAN published:\n{}", pe);
         } catch (IOException e) {
-            removeAck(pe.getGuid());
+            removeAck(guid);
             throw (e);
         }
 
         // Setup the timer for expiration.
         this.lock();
         try {
-            if (a.ackTask != null) {
-                ackTimer.schedule(a.ackTask, ackTimeout.toMillis());
-            } else {
-                logger.error("ackTimeout task for guid {} was NULL", a.guid);
-            }
+            a.ackTask = createAckTimerTask(guid, ah);
+            ackTimer.schedule(a.ackTask, ackTimeout.toMillis());
+        } catch (Exception e) {
+            throw e;
         } finally {
             this.unlock();
         }
-        return pe.getGuid();
+        return guid;
     }
 
     @Override
     public Subscription subscribe(String subject, io.nats.stan.MessageHandler cb)
             throws IOException, TimeoutException {
-        return _subscribe(subject, null, cb, null);
+        return subscribe(subject, cb, null);
     }
 
     @Override
     public Subscription subscribe(String subject, io.nats.stan.MessageHandler cb,
             SubscriptionOptions opts) throws IOException, TimeoutException {
-        return _subscribe(subject, null, cb, opts);
+        return subscribe(subject, null, cb, opts);
     }
 
     @Override
     public Subscription subscribe(String subject, String queue, io.nats.stan.MessageHandler cb)
             throws IOException, TimeoutException {
-        return _subscribe(subject, queue, cb, null);
+        return subscribe(subject, queue, cb, null);
     }
 
     @Override
     public Subscription subscribe(String subject, String queue, io.nats.stan.MessageHandler cb,
             SubscriptionOptions opts) throws IOException, TimeoutException {
-        return _subscribe(subject, queue, cb, opts);
-    }
-
-    Subscription _subscribe(String subject, String qgroup, io.nats.stan.MessageHandler cb,
-            SubscriptionOptions opts) throws IOException, TimeoutException {
-        SubscriptionImpl sub = new SubscriptionImpl(subject, qgroup, cb, this, opts);
+        // return _subscribe(subject, queue, cb, opts);
+        // }
+        //
+        // Subscription _subscribe(String subject, String qgroup, io.nats.stan.MessageHandler cb,
+        // SubscriptionOptions opts) throws IOException, TimeoutException {
+        SubscriptionImpl sub = null;
         // logger.trace("In _subscribe for subject {}, qgroup {}", subject,
         // qgroup);
         this.lock();
         try {
             if (nc == null) {
                 sub = null;
-                throw new IOException(ERR_CONNECTION_CLOSED);
+                throw new IllegalStateException(ERR_CONNECTION_CLOSED);
             }
+            sub = createSubscription(subject, queue, cb, this, opts);
 
             // Register subscription.
             subMap.put(sub.inbox, sub);
@@ -386,39 +445,8 @@ class ConnectionImpl implements Connection, MessageHandler {
 
             // Create a subscription request
             // FIXME(dlc) add others.
-            SubscriptionRequest.Builder srb =
-                    SubscriptionRequest.newBuilder().setClientID(this.clientId).setSubject(subject)
-                            .setQGroup(qgroup == null ? "" : qgroup).setInbox(sub.inbox)
-                            .setMaxInFlight(sub.getOptions().maxInFlight)
-                            .setAckWaitInSecs((int) sub.getOptions().getAckWait().getSeconds());
-            if (sub.getOptions().startAt != null) {
-                srb.setStartPosition(sub.getOptions().startAt);
-            }
-            if (sub.getOptions().getDurableName() != null) {
-                srb.setDurableName(sub.getOptions().getDurableName());
-            }
+            SubscriptionRequest sr = createSubscriptionRequest(sub);
 
-            switch (srb.getStartPosition()) {
-                case First:
-                    break;
-                case LastReceived:
-                    break;
-                case NewOnly:
-                    break;
-                case SequenceStart:
-                    srb.setStartSequence(sub.getOptions().getStartSequence());
-                    break;
-                case TimeDeltaStart:
-                    srb.setStartTimeDelta(TimeUnit.MILLISECONDS.toNanos(System.currentTimeMillis())
-                            - sub.getOptions().getStartTime(TimeUnit.NANOSECONDS));
-                    break;
-                case UNRECOGNIZED:
-                    break;
-                default:
-                    break;
-            }
-
-            SubscriptionRequest sr = srb.build();
             Message reply = null;
             try {
                 logger.trace("Sending SubscriptionRequest:\n{}", sr);
@@ -426,20 +454,62 @@ class ConnectionImpl implements Connection, MessageHandler {
             } catch (TimeoutException e) {
                 throw new TimeoutException(ConnectionImpl.ERR_TIMEOUT);
             }
+
             SubscriptionResponse response = null;
-            if (reply.getData() == null) {
-                reply.setData(new byte[0]);
+            try {
+                response = SubscriptionResponse.parseFrom(reply.getData());
+            } catch (InvalidProtocolBufferException e) {
+                throw e;
             }
-            response = SubscriptionResponse.parseFrom(reply.getData());
             logger.trace("Received SubscriptionResponse:\n{}", response);
             if (!response.getError().isEmpty()) {
                 throw new IOException(response.getError());
             }
-            sub.ackInbox = response.getAckInbox();
+            sub.setAckInbox(response.getAckInbox());
         } finally {
             sub.wUnlock();
         }
         return sub;
+    }
+
+    protected SubscriptionRequest createSubscriptionRequest(SubscriptionImpl sub) {
+        SubscriptionOptions subOpts = sub.getOptions();
+        SubscriptionRequest.Builder srb = SubscriptionRequest.newBuilder();
+        String clientId = sub.getConnection().getClientId();
+        String queue = sub.getQueue();
+        String subject = sub.getSubject();
+
+        srb.setClientID(clientId).setSubject(subject).setQGroup(queue == null ? "" : queue)
+                .setInbox(sub.getInbox()).setMaxInFlight(subOpts.getMaxInFlight())
+                .setAckWaitInSecs((int) subOpts.getAckWait().getSeconds());
+
+        switch (subOpts.getStartAt()) {
+            case First:
+                break;
+            case LastReceived:
+                break;
+            case NewOnly:
+                break;
+            case SequenceStart:
+                srb.setStartSequence(subOpts.getStartSequence());
+                break;
+            case TimeDeltaStart:
+                long delta = ChronoUnit.NANOS.between(subOpts.getStartTime(), Instant.now());
+                srb.setStartTimeDelta(delta);
+                break;
+            case UNRECOGNIZED:
+                break;
+            default:
+                break;
+        }
+        srb.setStartPosition(subOpts.getStartAt());
+
+        if (subOpts.getDurableName() != null) {
+            srb.setDurableName(subOpts.getDurableName());
+        }
+
+        SubscriptionRequest sr = srb.build();
+        return sr;
     }
 
     // Process an ack from the STAN cluster
@@ -450,7 +520,9 @@ class ConnectionImpl implements Connection, MessageHandler {
             pa = PubAck.parseFrom(msg.getData());
             logger.trace("Received PubAck:\n{}", pa);
         } catch (InvalidProtocolBufferException e) {
-            logger.error("Error unmarshaling PubAck", e);
+            logger.error("stan: error unmarshaling PubAck");
+            logger.debug("Full stack trace: ", e);
+            return;
         }
 
         // Remove
@@ -458,14 +530,19 @@ class ConnectionImpl implements Connection, MessageHandler {
 
         // Capture error if it exists.
         if (!pa.getError().isEmpty()) {
-            ex = new IOException(pa.getError());
-            logger.error("stan: protobuf PubAck error", ex);
-            ex.printStackTrace();
+            logger.error("stan: protobuf PubAck error: {}", pa.getError());
         }
 
         // Perform the ackHandler callback
         if (ackClosure != null && ackClosure.ah != null) {
             ackClosure.ah.onAck(pa.getGuid(), ex);
+        }
+    }
+
+    protected void processAckTimeout(String guid, AckHandler ah) {
+        removeAck(guid);
+        if (ah != null) {
+            ah.onAck(guid, new TimeoutException(ERR_TIMEOUT));
         }
     }
 
@@ -496,28 +573,38 @@ class ConnectionImpl implements Connection, MessageHandler {
     }
 
     @Override
-    public void onMessage(Message msg) {
-        // For handling inbound messages
+    public void onMessage(io.nats.client.Message msg) {
+        // For handling inbound NATS messages
         processMsg(msg);
     }
 
-    protected void processMsg(Message raw) {
-        io.nats.stan.Message msg = new io.nats.stan.Message();
+    protected io.nats.stan.Message createStanMessage(MsgProto msgp) {
+        return new io.nats.stan.Message(msgp);
+    }
+
+    protected void processMsg(io.nats.client.Message raw) {
+        io.nats.stan.Message stanMsg = null;
         boolean isClosed = false;
-        SubscriptionImpl sub;
+        SubscriptionImpl sub = null;
 
         try {
-            msg.msgp = MsgProto.parseFrom(raw.getData());
-            logger.trace("processMsg received MsgProto:\n{}", msg.msgp);
+            logger.trace("In processMsg, msg = {}", raw);
+            MsgProto msgp = MsgProto.parseFrom(raw.getData());
+            logger.trace("processMsg received MsgProto:\n{}", msgp);
+            stanMsg = createStanMessage(msgp);
         } catch (InvalidProtocolBufferException e) {
-            logger.error("Error unmarshaling msg", e);
+            logger.error("stan: error unmarshaling msg");
+            logger.debug("msg: {}", raw);
+            logger.debug("full stack trace:", e);
         }
 
         // Lookup the subscription
         lock();
         try {
-            isClosed = (nc == null);
+            isClosed = (this.nc == null);
             sub = (SubscriptionImpl) subMap.get(raw.getSubject());
+        } catch (Exception e) {
+            throw e;
         } finally {
             unlock();
         }
@@ -528,7 +615,7 @@ class ConnectionImpl implements Connection, MessageHandler {
         }
 
         // Store in msg for backlink
-        msg.setSubscription(sub);
+        stanMsg.setSubscription(sub);
 
         io.nats.stan.MessageHandler cb = null;
         String ackSubject = null;
@@ -538,40 +625,47 @@ class ConnectionImpl implements Connection, MessageHandler {
 
         sub.rLock();
         try {
-            cb = sub.cb;
-            ackSubject = sub.ackInbox;
+            cb = sub.getMessageHandler();
+            ackSubject = sub.getAckInbox();
             isManualAck = sub.getOptions().isManualAcks();
-            subsc = sub.sc;
+            subsc = sub.getConnection();
             if (subsc != null) {
                 subsc.lock();
-                nc = subsc.nc;
+                nc = subsc.getNatsConnection();
                 subsc.unlock();
             }
+        } catch (Exception e) {
+            throw e;
         } finally {
             sub.rUnlock();
         }
 
         // Perform the callback
         if (cb != null && subsc != null) {
-            cb.onMessage(msg);
+            cb.onMessage(stanMsg);
         }
 
         // Process auto-ack
         if (!isManualAck && nc != null) {
-            Ack ack = Ack.newBuilder().setSubject(msg.getSubject()).setSequence(msg.getSequence())
-                    .build();
+            Ack ack = Ack.newBuilder().setSubject(stanMsg.getSubject())
+                    .setSequence(stanMsg.getSequence()).build();
             try {
                 nc.publish(ackSubject, ack.toByteArray());
                 logger.trace("processMsg published Ack:\n{}", ack);
             } catch (IOException e) {
                 // FIXME(dlc) - Async error handler? Retry?
-                logger.error("Exception while publishing auto-ack:", e);
+                logger.error("Exception while publishing auto-ack: {}", e.getMessage());
+                logger.debug("Stack trace: ", e);
             }
         }
     }
 
     public String getClientId() {
         return this.clientId;
+    }
+
+    protected io.nats.client.Connection getNatsConnection() {
+        return this.nc;
     }
 
     public String newInbox() {
@@ -584,6 +678,10 @@ class ConnectionImpl implements Connection, MessageHandler {
 
     protected void unlock() {
         mu.unlock();
+    }
+
+    protected io.nats.client.Subscription getAckSubscription() {
+        return this.ackSubscription;
     }
 
     // test injection setter/getters
@@ -603,22 +701,22 @@ class ConnectionImpl implements Connection, MessageHandler {
         return pubAckMap;
     }
 
+    void setSubMap(Map<String, Subscription> map) {
+        this.subMap = map;
+    }
+
+    Map<String, Subscription> getSubMap() {
+        return subMap;
+    }
+
     class AckClosure {
-        TimerTask ackTask;
+        protected TimerTask ackTask;
         AckHandler ah;
         String guid;
 
         AckClosure(final String guid, final AckHandler ah) {
             this.ah = ah;
             this.guid = guid;
-            this.ackTask = new java.util.TimerTask() {
-                public void run() {
-                    removeAck(guid);
-                    if (ah != null) {
-                        ah.onAck(guid, new TimeoutException(ERR_TIMEOUT));
-                    }
-                }
-            };
         }
     }
 }
