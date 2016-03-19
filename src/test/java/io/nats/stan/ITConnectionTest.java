@@ -1,7 +1,9 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
+ * Copyright (c) 2015-2016 Apcera Inc.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the MIT License (MIT)
+ * which accompanies this distribution, and is available at
+ * http://opensource.org/licenses/MIT
  *******************************************************************************/
 
 package io.nats.stan;
@@ -35,6 +37,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -49,12 +53,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-@Category(UnitTest.class)
-public class ConnectionTest {
+@Category(IntegrationTest.class)
+public class ITConnectionTest {
     @Rule
     public TestCasePrinterRule pr = new TestCasePrinterRule(System.out);
 
-    static final Logger logger = LoggerFactory.getLogger(ConnectionTest.class);
+    static final Logger logger = LoggerFactory.getLogger(ITConnectionTest.class);
 
     static final String clusterName = "my_test_cluster";
     static final String clientName = "me";
@@ -487,16 +491,13 @@ public class ConnectionTest {
                     sc.publish("foo", String.format("%d", i).getBytes());
                 }
 
-                // Sleep a little to let the messages get stored/acked
-                // sleep(10);
-
                 // Now subscribe and set start position to last received.
                 final Channel<Boolean> ch = new Channel<Boolean>();
                 MessageHandler mcb = new MessageHandler() {
                     public void onMessage(Message msg) {
                         received.incrementAndGet();
                         savedMsgs.add(msg);
-                        System.err.println(msg);
+                        logger.debug("msg={}", msg);
                         ch.add(true);
                     }
                 };
@@ -617,7 +618,8 @@ public class ConnectionTest {
 
                 // Buffer each side so slow tests still work.
                 sleep(250, TimeUnit.MILLISECONDS);
-                Date startTime = new Date(System.currentTimeMillis());
+                // Date startTime = new Date(System.currentTimeMillis());
+                final Instant startTime = Instant.now();
                 sleep(250, TimeUnit.MILLISECONDS);
 
                 // Publish last 5
@@ -626,8 +628,8 @@ public class ConnectionTest {
                 }
 
                 // Check for invalid configuration
-                SubscriptionOptions opts =
-                        new SubscriptionOptions.Builder().startAtTime(new Date(-1)).build();
+                SubscriptionOptions opts = new SubscriptionOptions.Builder()
+                        .startAtTime(new Date(-1).toInstant()).build();
                 boolean exThrown = false;
                 try (SubscriptionImpl sub = (SubscriptionImpl) sc.subscribe("foo", null, opts)) {
                     fail("Subscription should have failed");
@@ -667,8 +669,13 @@ public class ConnectionTest {
                     while (it.hasNext()) {
                         Message msg = it.next();
                         // Check that time is always greater than startTime
-                        assertTrue(msg.getTimestamp() > TimeUnit.MILLISECONDS
-                                .toNanos(startTime.getTime()));
+                        long seconds = TimeUnit.NANOSECONDS.toSeconds(msg.getTimestamp());
+                        long nanos = msg.getTimestamp() - TimeUnit.SECONDS.toNanos(seconds);
+                        Instant tsInstant = Instant.ofEpochSecond(seconds, nanos);
+                        assertTrue(tsInstant.compareTo(startTime) > 0);
+                        // assertTrue(msg.getTimestamp() >
+                        // SubscriptionOptions.toBigInteger(startTime)
+                        // .longValue());
 
                         // Check sequence
                         assertEquals(seq, msg.getSequence());
@@ -680,11 +687,11 @@ public class ConnectionTest {
                     }
 
                     // Now test Ago helper
-                    long delta = System.currentTimeMillis() - startTime.getTime();
+                    long delta = ChronoUnit.NANOS.between(startTime, Instant.now());
 
                     try (Subscription sub2 =
                             sc.subscribe("foo", mcb, new SubscriptionOptions.Builder()
-                                    .startAtTimeDelta(delta, TimeUnit.MILLISECONDS).build())) {
+                                    .startAtTimeDelta(Duration.ofNanos(delta)).build())) {
                         assertTrue("Did not receive our messages",
                                 waitTime(ch, 5, TimeUnit.SECONDS));
                     } catch (IOException | TimeoutException e) {
@@ -1402,7 +1409,7 @@ public class ConnectionTest {
                         int d1 = (int) Math.abs((double) (expected - s1Received.get()));
                         int d2 = (int) Math.abs((double) (expected - s2Received.get()));
                         if (d1 > var || d2 > var) {
-                            fail(String.format("Too much variance in totals: %d, %d > %d", d1, d2,
+                            fail(String.format("Too much variance in totals: %d, %d > %f", d1, d2,
                                     var));
                         }
                     }
@@ -1718,7 +1725,7 @@ public class ConnectionTest {
      * @param args the args
      */
     public static void main(String[] args) {
-        ConnectionTest test = new ConnectionTest();
+        ITConnectionTest test = new ITConnectionTest();
 
         int idx = 0;
         while (true) {

@@ -7,7 +7,28 @@
 package io.nats.stan;
 
 
+import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.matches;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import io.nats.client.AsyncSubscription;
 import io.nats.client.Channel;
+import io.nats.client.NUID;
+import io.nats.stan.protobuf.CloseResponse;
+import io.nats.stan.protobuf.ConnectResponse;
+import io.nats.stan.protobuf.PubAck;
+import io.nats.stan.protobuf.PubMsg;
+import io.nats.stan.protobuf.SubscriptionRequest;
+import io.nats.stan.protobuf.SubscriptionResponse;
+
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -19,9 +40,164 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 class UnitTestUtilities {
+    static final Logger logger = LoggerFactory.getLogger(UnitTestUtilities.class);
+
     // final Object mu = new Object();
     static NATSServer defaultServer = null;
     Process authServerProcess = null;
+
+    static final String testClusterName = "my_test_cluster";
+    static final String testClientName = "me";
+
+    static ConnectionImpl newDefaultConnection(Logger log) {
+        io.nats.client.ConnectionFactory ncf = new io.nats.client.ConnectionFactory();
+        io.nats.client.Connection nc = null;
+        ncf.setReconnectAllowed(false);
+        try {
+            nc = ncf.createConnection();
+        } catch (IOException | TimeoutException e) {
+            log.error("Failed to create NATS connection", e);
+        }
+
+        ConnectionFactory scf = new ConnectionFactory();
+        scf.setNatsConnection(nc);
+        scf.setClientId(testClientName);
+        scf.setClusterId(testClusterName);
+
+        ConnectionImpl sc = null;
+        try {
+            sc = scf.createConnection();
+        } catch (IOException | TimeoutException e) {
+            log.error("Failed to create STAN connection", e);
+        }
+        return sc;
+    }
+
+    static ConnectionImpl newMockedConnection() throws IOException, TimeoutException {
+        io.nats.client.Connection nc = setupMockNatsConnection();
+        Options opts = new Options.Builder().setNatsConn(nc).create();
+        ConnectionImpl conn = new ConnectionImpl(testClusterName, testClientName, opts);
+        conn.connect();
+        return conn;
+    }
+
+    protected static io.nats.client.Connection setupMockNatsConnection()
+            throws IOException, TimeoutException {
+        final String subRequests = String.format("_STAN.sub.%s", NUID.nextGlobal());
+        final String pubPrefix = String.format("_STAN.pub.%s", NUID.nextGlobal());
+        final String unsubRequests = String.format("_STAN.unsub.%s", NUID.nextGlobal());
+        final String closeRequests = String.format("_STAN.close.%s", NUID.nextGlobal());
+        final String hbInbox = String.format("_INBOX.%s", io.nats.client.NUID.nextGlobal());
+
+        io.nats.client.Connection nc = mock(io.nats.client.Connection.class);
+
+        when(nc.newInbox()).thenReturn(hbInbox);
+
+        AsyncSubscription hbSubscription = mock(AsyncSubscription.class);
+        when(hbSubscription.getSubject()).thenReturn(hbInbox);
+        final io.nats.client.MessageHandler[] hbCallback = new io.nats.client.MessageHandler[1];
+        doAnswer(new Answer<AsyncSubscription>() {
+            @Override
+            public AsyncSubscription answer(InvocationOnMock invocation) throws Throwable {
+                // when(br.readLine()).thenReturn("PONG");
+                Object[] args = invocation.getArguments();
+                hbCallback[0] = (io.nats.client.MessageHandler) args[1];
+                return hbSubscription;
+            }
+        }).when(nc).subscribe(eq(hbInbox), any(io.nats.client.MessageHandler.class));
+
+        String discoverSubject =
+                String.format("%s.%s", ConnectionImpl.DEFAULT_DISCOVER_PREFIX, testClusterName);
+        ConnectResponse crProto =
+                ConnectResponse.newBuilder().setPubPrefix(pubPrefix).setSubRequests(subRequests)
+                        .setUnsubRequests(unsubRequests).setCloseRequests(closeRequests).build();
+        io.nats.client.Message cr = new io.nats.client.Message("foo", "bar", crProto.toByteArray());
+        try {
+            when(nc.request(eq(discoverSubject), any(byte[].class), any(long.class)))
+                    .thenReturn(cr);
+        } catch (TimeoutException | IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+
+        AsyncSubscription ackSubscription = mock(AsyncSubscription.class);
+        final String[] ackSubject = new String[1];
+        final io.nats.client.MessageHandler[] ackMsgHandler = new io.nats.client.MessageHandler[1];
+        // Capture the ackSubject and ackHandler
+        doAnswer(new Answer<AsyncSubscription>() {
+            @Override
+            public AsyncSubscription answer(InvocationOnMock invocation) throws Throwable {
+                // when(br.readLine()).thenReturn("PONG");
+                Object[] args = invocation.getArguments();
+                ackSubject[0] = (String) args[0];
+                // System.err.println("ackSubject has been set to " + ackSubject[0]);
+                ackMsgHandler[0] = (io.nats.client.MessageHandler) args[1];
+                return ackSubscription;
+            }
+        }).when(nc).subscribe(matches("^" + ConnectionImpl.DEFAULT_ACK_PREFIX + "\\..*$"),
+                any(io.nats.client.MessageHandler.class));
+
+        when(nc.isClosed()).thenReturn(false);
+
+        // Handle SubscriptionRequests
+        doAnswer(new Answer<io.nats.client.Message>() {
+            @Override
+            public io.nats.client.Message answer(InvocationOnMock invocation) throws Throwable {
+                Object[] args = invocation.getArguments();
+                SubscriptionRequest req = SubscriptionRequest.parseFrom((byte[]) args[1]);
+                String subInbox = req.getInbox();
+                String ackInbox = String.format("_INBOX.%s", NUID.nextGlobal());
+                SubscriptionResponse sr =
+                        SubscriptionResponse.newBuilder().setAckInbox(ackInbox).build();
+                io.nats.client.Message rawResponse = new io.nats.client.Message();
+                rawResponse.setSubject(subInbox);
+                rawResponse.setData(sr.toByteArray());
+                return rawResponse;
+            }
+        }).when(nc).request(matches(subRequests), any(byte[].class), any(long.class),
+                any(TimeUnit.class));
+
+        CloseResponse closeResponseProto = CloseResponse.newBuilder().build();
+        io.nats.client.Message closeResponse =
+                new io.nats.client.Message("foo", "bar", closeResponseProto.toByteArray());
+        try {
+            when(nc.request(eq(closeRequests), any(byte[].class), any(long.class)))
+                    .thenReturn(closeResponse);
+        } catch (TimeoutException | IOException e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+
+        /**
+         * Anytime a STAN message is published synchronously, call the ackSubscription's handler
+         * with a valid ACK so that publish will return.
+         */
+        doAnswer(new Answer<Void>() {
+            @Override
+            public Void answer(InvocationOnMock invocation) throws Throwable {
+                // when(br.readLine()).thenReturn("PONG");
+                Object[] args = invocation.getArguments();
+                // String pubSubject = (String) args[0];
+                String localAckSubject = (String) args[1];
+                byte[] payload = (byte[]) args[2];
+                PubMsg pubMsg = PubMsg.parseFrom(payload);
+                // System.err.printf("mock received PubMsg:\n%s", pubMsg);
+                String nuid = pubMsg.getGuid();
+                PubAck pubAck = PubAck.newBuilder().setGuid(nuid).build();
+                io.nats.client.Message raw = new io.nats.client.Message();
+                raw.setSubject(localAckSubject);
+                raw.setData(pubAck.toByteArray());
+                ackMsgHandler[0].onMessage(raw);
+                return null;
+            }
+        }).when(nc).publish(any(String.class),
+                matches("^" + ConnectionImpl.DEFAULT_ACK_PREFIX + "\\..*$"), any(byte[].class));
+        // }).when(nc).publish(any(String.class), eq(ackSubject[0]), any(byte[].class));
+
+        return nc;
+    }
+
 
     static synchronized void startDefaultServer() {
         startDefaultServer(false);
