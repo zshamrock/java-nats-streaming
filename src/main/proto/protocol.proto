@@ -4,10 +4,10 @@
 // compiled via `protoc -I=. -I=$GOPATH/src  --gogofaster_out=. protocol.proto`
 
 syntax = "proto3";
-package stan;
+package pb;
 
 // Go specific options
-//option go_package = "stan";
+//option go_package = "pb";
 //option (gogoproto.marshaler_all) = true;
 //option (gogoproto.sizer_all) = true;
 //option (gogoproto.unmarshaler_all) = true;
@@ -17,7 +17,7 @@ package stan;
 option java_package = "io.nats.stan.protobuf";
 option java_multiple_files = true;
 
-//import weak "github.com/gogo/protobuf/gogoproto/gogo.proto";
+//import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 // How messages are delivered to the STAN cluster
 message PubMsg {
