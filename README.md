@@ -15,3 +15,8 @@ git clone git@github.com:/nats-io/stan-java-client.git
 
 mvn install
 ```
+
+## Known Issues and Notes for the STAN Preview
+
+- Download a server binary from the [STAN Server Preview releases page](https://github.com/nats-io/stan-server-preview/releases)
+- See the [STAN Go client README] for more details
