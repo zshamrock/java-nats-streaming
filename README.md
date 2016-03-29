@@ -16,6 +16,23 @@ git clone git@github.com:/nats-io/stan-java-client.git
 mvn install
 ```
 
+Load the following dependency in your project's pom.xml:
+
+```
+  <dependencies>
+    ...
+    <dependency>
+      <groupId>io.nats</groupId>
+      <artifactId>jstan</artifactId>
+      <version>0.1.0-SNAPSHOT</version>
+    </dependency>
+  </dependencies>
+```
+
+## Documentation
+
+Once installation is complete, the javadoc can be accessed via `target/apidocs/index.html`
+
 ## Known Issues and Notes for the STAN Preview
 
 - Download a server binary from the [STAN Server Preview releases page](https://github.com/nats-io/stan-server-preview/releases)
