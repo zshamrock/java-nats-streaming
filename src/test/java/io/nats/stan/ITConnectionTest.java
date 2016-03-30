@@ -1,9 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the MIT License (MIT)
- * which accompanies this distribution, and is available at
- * http://opensource.org/licenses/MIT
+ * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ * materials are made available under the terms of the MIT License (MIT) which accompanies this
+ * distribution, and is available at http://opensource.org/licenses/MIT
  *******************************************************************************/
 
 package io.nats.stan;
@@ -1214,8 +1212,9 @@ public class ITConnectionTest {
                             sch.add(true);
                         }
                     }
-                }, new SubscriptionOptions.Builder().deliverAllAvailable().setMaxInFlight(100)
-                        .setAckWait(ackRedeliverTime).setManualAcks(true).build())) {
+                }, new SubscriptionOptions.Builder().deliverAllAvailable()
+                        .setMaxInFlight(toSend + 1).setAckWait(ackRedeliverTime).setManualAcks(true)
+                        .build())) {
                     assertTrue("Did not receive first delivery of all messages",
                             waitTime(ch, 5, TimeUnit.SECONDS));
                     assertEquals("Did not receive correct number of messages", toSend,
