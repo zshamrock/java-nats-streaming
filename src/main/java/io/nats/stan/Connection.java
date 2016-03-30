@@ -11,6 +11,9 @@ import io.nats.client.NUID;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * A {@code Connection} object is a client's active connection to the STAN streaming data system.
+ */
 public interface Connection extends AutoCloseable {
     /**
      * Publishes the payload specified by {@code data} to the subject specified by {@code subject}.

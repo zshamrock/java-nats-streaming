@@ -36,6 +36,12 @@ public interface Subscription extends AutoCloseable {
      */
     void close();
 
+    /**
+     * Returns the {@code SubscriptionOptions} object for this {@code Subscription} object.
+     * 
+     * @return this {@code Subscription}'s code SubscriptionOptions} object.
+     * @see io.nats.stan.SubscriptionOptions
+     */
     SubscriptionOptions getOptions();
 }
 

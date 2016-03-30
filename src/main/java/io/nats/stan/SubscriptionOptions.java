@@ -130,6 +130,9 @@ public class SubscriptionOptions {
         return manualAcks;
     }
 
+    /**
+     * A Builder implementation for creating an immutable {@code SubscriptionOptions} object.
+     */
     public static final class Builder {
         String durableName;
         int maxInFlight = SubscriptionImpl.DEFAULT_MAX_IN_FLIGHT;

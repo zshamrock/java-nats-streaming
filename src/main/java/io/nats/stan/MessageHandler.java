@@ -6,6 +6,14 @@
 
 package io.nats.stan;
 
+/**
+ * A MessageHandler object is used as a callback to receive asynchronously delivered messages.
+ */
 public interface MessageHandler {
+    /**
+     * Passes a message to the handler.
+     * 
+     * @param msg - the received Message that triggered the callback invocation.
+     */
     void onMessage(io.nats.stan.Message msg);
 }

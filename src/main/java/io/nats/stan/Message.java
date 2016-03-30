@@ -23,11 +23,11 @@ public class Message {
     private byte[] data;
     // private MsgProto msgp; // MsgProto: Seq, Subject, Reply[opt], Data, Timestamp, CRC32[opt]
     private SubscriptionImpl sub;
-    protected long sequence;
-    protected long timestamp;
-    protected boolean redelivered;
-    protected int crc32;
-    protected boolean immutable;
+    private long sequence;
+    private long timestamp;
+    private boolean redelivered;
+    private int crc32;
+    private boolean immutable;
 
     Message() {}
 
@@ -46,7 +46,7 @@ public class Message {
     }
 
     /**
-     * Returns timestamp as a {@link java.time.Instant}
+     * Returns timestamp as an {@link java.time.Instant}.
      * 
      * @return a java.time.Instant representing the message timestamp
      */
@@ -70,6 +70,11 @@ public class Message {
         return sub;
     }
 
+    /**
+     * Returns the message sequence number.
+     * 
+     * @return the message sequence number
+     */
     public long getSequence() {
         return sequence;
     }

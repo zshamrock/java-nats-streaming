@@ -13,6 +13,11 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * A {@code ConnectionFactory} object encapsulates a set of connection configuration options. A
+ * client uses it to create a connection to the STAN streaming data system.
+ * 
+ */
 public class ConnectionFactory {
     private Duration ackTimeout = Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT);
     private Duration connectTimeout = Duration.ofSeconds(ConnectionImpl.DEFAULT_CONNECT_WAIT);
