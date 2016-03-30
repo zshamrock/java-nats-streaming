@@ -4,7 +4,7 @@ STAN is an extremely performant, lightweight reliable streaming platform powered
 
 [![License MIT](https://img.shields.io/npm/l/express.svg)](http://opensource.org/licenses/MIT)
 [![Javadoc](http://javadoc-badge.appspot.com/io.nats/stan-java-client.svg?label=javadoc)](http://nats-io.github.io/stan-java-client)
-[![Build Status](https://travis-ci.com/nats-io/stan-java-client.svg?branch=master)](http://travis-ci.com/nats-io/stan-java-client)
+[![Build Status](https://travis-ci.com/nats-io/stan-java-client.svg?token=CV9LxEaCaFihq8PsFhqq&branch=master)](http://travis-ci.com/nats-io/stan-java-client)
 
 ## Installation
 
