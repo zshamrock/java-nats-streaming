@@ -3,6 +3,7 @@
  * materials are made available under the terms of the MIT License (MIT) which accompanies this
  * distribution, and is available at http://opensource.org/licenses/MIT
  *******************************************************************************/
+
 package io.nats.stan;
 
 import static io.nats.stan.UnitTestUtilities.newMockedConnection;
@@ -1316,7 +1317,7 @@ public class ConnectionImplTest {
             assertEquals(ac, pubAckMap.get(guid));
             TimerTask t = conn.createAckTimerTask(guid, ah);
             conn.ackTimer.schedule(t, 10);
-            sleep(15);
+            sleep(100);
             assertNull(pubAckMap.get(guid));
         }
     }
