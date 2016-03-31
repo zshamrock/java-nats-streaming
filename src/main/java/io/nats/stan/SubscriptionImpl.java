@@ -80,11 +80,13 @@ class SubscriptionImpl implements Subscription {
         return this.cb;
     }
 
-    protected String getQueue() {
+    @Override
+    public String getQueue() {
         return this.qgroup;
     }
 
-    protected String getSubject() {
+    @Override
+    public String getSubject() {
         return this.subject;
     }
 

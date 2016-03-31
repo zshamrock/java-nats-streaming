@@ -21,6 +21,21 @@ import java.util.concurrent.TimeoutException;
  */
 public interface Subscription extends AutoCloseable {
     /**
+     * Retrieves the subject of interest from the {@code Subscription} object.
+     * 
+     * @return the subject of interest
+     */
+    String getSubject();
+
+    /**
+     * Returns the optional queue group name. If present, all subscriptions with the same name will
+     * form a distributed queue, and each message will only be processed by one member of the group.
+     * 
+     * @return the name of the queue group this Subscription belongs to.
+     */
+    String getQueue();
+
+    /**
      * Removes interest in the {@code Subscription} object's subject immediately.
      * 
      * @throws IOException if an error occurs while notifying the server
