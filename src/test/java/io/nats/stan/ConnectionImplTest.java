@@ -390,9 +390,9 @@ public class ConnectionImplTest {
             when(conn.nc.request(eq(conn.closeRequests), any(byte[].class), any(long.class)))
                     .thenReturn(closeResponse);
 
-            // Should throw IOException when cr.getError isn't empty
+            // Should not throw any exception on empty payload
             conn.close();
-            verifier.verifyLogMsgEquals(Level.WARN, "stan: CloseResponse was null");
+            // verifier.verifyLogMsgEquals(Level.WARN, "stan: CloseResponse was null");
         }
     }
 
