@@ -239,8 +239,6 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 if (!cr.getError().isEmpty()) {
                     throw new IOException(cr.getError());
                 }
-            } else {
-                logger.warn("stan: CloseResponse was null");
             }
         } finally {
             if (nc != null) {
@@ -272,8 +270,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     protected void processHeartBeat(Message msg) {
         // No payload assumed, just reply
         try {
-            System.err.println("Responding to HB");
             nc.publish(msg.getReplyTo(), null);
+            logger.debug("Sent heartbeat response");
         } catch (IOException e) {
             logger.warn("stan: error publishing heartbeat response: {}", e.getMessage());
             logger.debug("Full stack trace:", e);
