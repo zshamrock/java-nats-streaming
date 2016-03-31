@@ -28,14 +28,14 @@ public class ConnectionFactory {
     private String clientId;
     private String clusterId;
 
-    ConnectionFactory() {}
+    public ConnectionFactory() {}
 
-    ConnectionFactory(String clusterId, String clientId) {
+    public ConnectionFactory(String clusterId, String clientId) {
         this.clusterId = clusterId;
         this.clientId = clientId;
     }
 
-    ConnectionImpl createConnection() throws IOException, TimeoutException {
+    public ConnectionImpl createConnection() throws IOException, TimeoutException {
         ConnectionImpl conn = new ConnectionImpl(clusterId, clientId, options());
         conn.connect();
         return conn;
