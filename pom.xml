@@ -433,6 +433,7 @@
                 <artifactId>coveralls-maven-plugin</artifactId>
                 <version>${coveralls-maven-plugin-version}</version>
                 <configuration>
+                    <serviceName>travis-pro</serviceName>
                     <repoToken>${env.COVERALLS_TOKEN}</repoToken>
                     <jacocoFile>${project.reporting.outputDirectory}/jacoco-ut/jacoco.xml</jacocoFile>
                     <sourceEncoding>${project.reporting.sourceEncoding}</sourceEncoding>
