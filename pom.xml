@@ -433,7 +433,7 @@
                 <artifactId>coveralls-maven-plugin</artifactId>
                 <version>${coveralls-maven-plugin-version}</version>
                 <configuration>
-                    <repoToken>7fvWrchpHceKauTqp3PgceKvsWYMAN6S7</repoToken>
+                    <repoToken>${env.COVERALLS_TOKEN}</repoToken>
                     <jacocoFile>${project.reporting.outputDirectory}/jacoco-ut/jacoco.xml</jacocoFile>
                     <sourceEncoding>${project.reporting.sourceEncoding}</sourceEncoding>
                 </configuration>
