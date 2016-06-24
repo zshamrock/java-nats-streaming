@@ -198,8 +198,6 @@
                 <groupId>org.eluder.coveralls</groupId>
                 <artifactId>coveralls-maven-plugin</artifactId>
                 <configuration>
-                    <serviceName>travis-pro</serviceName>
-                    <repoToken>${env.COVERALLS_TOKEN}</repoToken>
                     <jacocoFile>${project.reporting.outputDirectory}/jacoco-ut/jacoco.xml</jacocoFile>
                     <sourceEncoding>${project.reporting.sourceEncoding}</sourceEncoding>
                 </configuration>
