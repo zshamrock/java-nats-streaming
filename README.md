@@ -9,8 +9,6 @@ NATS Streaming is an extremely performant, lightweight reliable streaming platfo
 
 ## Installation
 
-Download a server binary from the [STAN Server Preview releases page](https://github.com/nats-io/stan-server-preview/releases).
-
 Install the client jar:
 
 
@@ -27,7 +25,7 @@ Load the following dependency in your project's pom.xml:
     ...
     <dependency>
       <groupId>io.nats</groupId>
-      <artifactId>jstan</artifactId>
+      <artifactId>java-nats-streaming</artifactId>
       <version>0.1.0-SNAPSHOT</version>
     </dependency>
   </dependencies>
@@ -37,10 +35,6 @@ Load the following dependency in your project's pom.xml:
 
 The javadoc can be accessed [here](http://nats-io.github.io/java-nats-streaming/).
 
-## Known Issues and Notes for the STAN Preview
-
-- See the [NATS Streaming Go client README](https://github.com/nats-io/stan) for more details
-
 ## Basic Usage
 
 ```java
@@ -49,7 +43,7 @@ ConnectionFactory cf = new ConnectionFactory(clusterID, clientID);
 Connection sc = cf.createConnection();
 
 // Simple Synchronous Publisher
-sc.publish("foo", "Hello World".getBytes()); // does not return until an ack has been received from STAN
+sc.publish("foo", "Hello World".getBytes()); // does not return until an ack has been received from NATS Streaming server
 
 // Simple Async Subscriber
 Subscription sub = sc.subscribe("foo", new MessageHandler() {
