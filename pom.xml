@@ -7,95 +7,38 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.sonatype.oss</groupId>
-        <artifactId>oss-parent</artifactId>
-        <version>9</version>
+        <groupId>io.nats</groupId>
+        <artifactId>nats-parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
     </parent>
 
-    <groupId>io.nats.stan</groupId>
-    <artifactId>stan</artifactId>
-    <packaging>jar</packaging>
+    <groupId>io.nats</groupId>
+    <artifactId>java-nats-streaming</artifactId>
     <version>0.1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
 
-    <name>jstan</name>
-    <description>Java client library for STAN</description>
-    <url>https://github.com/nats-io/jstan</url>
+    <name>java-nats-streaming</name>
+    <description>Java client library for NATS Streaming</description>
+    <url>https://github.com/nats-io/java-nats-streaming</url>
     <inceptionYear>2016</inceptionYear>
     <organization>
         <url>http://nats.io</url>
         <name>Apcera, Inc.</name>
     </organization>
-    <licenses>
-        <license>
-            <name>MIT License</name>
-            <url>http://www.opensource.org/licenses/mit-license.php</url>
-            <distribution>repo</distribution>
-        </license>
-    </licenses>
-
-    <developers>
-        <developer>
-            <id>larry</id>
-            <name>Larry McQueary</name>
-            <email>larry@apcera.com</email>
-            <url>https://github.com/mcqueary/</url>
-            <organization>Apcera Inc.</organization>
-            <organizationUrl>http://www.apcera.com</organizationUrl>
-            <roles>
-                <role>Product Manager</role>
-                <role>Developer</role>
-            </roles>
-            <timezone>America/Denver</timezone>
-            <properties>
-                <picUrl>http://www.example.com/jdoe/pic</picUrl>
-            </properties>
-        </developer>
-    </developers>
-    <contributors />
-
-    <mailingLists>
-        <mailingList>
-            <name>nats</name>
-            <archive>https://groups.google.com/group/natsio/</archive>
-            <subscribe>natsio+subscribe@googlegroups.com</subscribe>
-            <unsubscribe>natsio+unsubscribe@googlegroups.com</unsubscribe>
-            <post>natsio@googlegroups.com</post>
-        </mailingList>
-    </mailingLists>
-
-    <prerequisites />
-
-    <modules />
-
     <scm>
-        <url>https://github.com/nats-io/jstan</url>
-        <connection>scm:git:git://github.com/nats-io/jstan.git</connection>
-        <developerConnection>scm:git:git@github.com:nats-io/jstan.git</developerConnection>
+        <url>https://github.com/nats-io/java-nats-streaming</url>
+        <connection>scm:git:git://github.com/nats-io/java-nats-streaming.git</connection>
+        <developerConnection>scm:git:git@github.com:nats-io/java-nats-streaming.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
-
     <issueManagement>
-        <url>https://github.com/nats-io/jstan/issues/</url>
+        <url>https://github.com/nats-io/java-nats-streaming/issues/</url>
         <system>GitHub Issues</system>
     </issueManagement>
-
     <ciManagement>
         <system>Travis</system>
-        <url>https://travis-ci.org/nats-io/jstan/</url>
+        <url>https://travis-ci.org/nats-io/java-nats-streaming/</url>
     </ciManagement>
-
-    <distributionManagement>
-        <repository>
-            <id>ossrh</id>
-            <name>Sonatype OSS Staging</name>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
-        </repository>
-        <snapshotRepository>
-            <id>ossrh</id>
-            <name>Sonatype OSS Snapshots</name>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-        </snapshotRepository>
-    </distributionManagement>
 
     <properties>
         <!-- protobuf paths -->
@@ -103,45 +46,17 @@
         <protobuf.output.directory>${project.build.directory}/generated-sources</protobuf.output.directory>
 
         <!-- library versions -->
-        <build-helper-maven-plugin-version>1.9.1</build-helper-maven-plugin-version>
-        <coveralls-maven-plugin-version>2.2.0</coveralls-maven-plugin-version>
-        <groovy-version>2.4.5</groovy-version>
-        <guava-version>19.0</guava-version>
-        <jacoco-maven-plugin-version>0.7.5.201505241946</jacoco-maven-plugin-version>
-        <java.version>1.8</java.version>
         <jnats-version>0.5.0-SNAPSHOT</jnats-version>
-        <junit-version>4.11</junit-version>
-        <logback-version>1.1.3</logback-version>
-        <maven-antrun-plugin-version>1.8</maven-antrun-plugin-version>
-        <maven-checkstyle-plugin-version>2.17</maven-checkstyle-plugin-version>
-        <maven-compiler-plugin-version>3.5</maven-compiler-plugin-version>
-        <maven-dependency-plugin-version>2.10</maven-dependency-plugin-version>
-        <maven-failsafe-plugin-version>2.19.1</maven-failsafe-plugin-version>
-        <maven-gpg-plugin-version>1.6</maven-gpg-plugin-version>
-        <maven-javadoc-plugin-version>2.10.3</maven-javadoc-plugin-version>
-        <maven-release-plugin-version>2.5.3</maven-release-plugin-version>
-        <maven-scm-publish-plugin-version>1.1</maven-scm-publish-plugin-version>
-        <maven-source-plugin-version>2.4</maven-source-plugin-version>
-        <maven-surefire-plugin-version>2.19</maven-surefire-plugin-version>
-        <mockito-version>2.0.31-beta</mockito-version>
-        <nexus-staging-maven-plugin>1.6.3</nexus-staging-maven-plugin>
-        <os-maven-plugin>1.4.0.Final</os-maven-plugin>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <project.reporting.sourceEncoding>UTF-8</project.reporting.sourceEncoding>
-        <protobuf-java-version>3.0.0-beta-2</protobuf-java-version>
-        <protobuf-maven-plugin-version>0.5.0</protobuf-maven-plugin-version>
-        <slf4j-version>1.7.5</slf4j-version>
+        
+        <!-- plugin configuration -->
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        
     </properties>
 
     <dependencyManagement />
     <dependencies>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>${junit-version}</version>
-            <scope>test</scope>
-        </dependency>
+        <!-- COMPILE -->
         <dependency>
             <groupId>io.nats</groupId>
             <artifactId>jnats</artifactId>
@@ -153,21 +68,12 @@
             <version>${protobuf-java-version}</version>
         </dependency>
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${slf4j-version}</version>
-        </dependency>
-        <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>${guava-version}</version>
         </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>${mockito-version}</version>
-            <scope>test</scope>
-        </dependency>
+
+        <!-- TEST -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
@@ -187,28 +93,6 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-    <repositories>
-        <repository>
-            <id>sonatype-snapshots</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
-    <pluginRepositories>
-        <pluginRepository>
-            <releases>
-                <updatePolicy>never</updatePolicy>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-            <id>central</id>
-            <name>Central Repository</name>
-            <url>https://repo.maven.apache.org/maven2</url>
-        </pluginRepository>
-    </pluginRepositories>
 
     <build>
         <!-- copy protoc binary artifact -->
@@ -216,7 +100,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>${maven-dependency-plugin-version}</version>
                 <executions>
                     <execution>
                         <id>copy-protoc</id>
@@ -241,11 +124,14 @@
                 </executions>
             </plugin>
 
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+            </plugin>
             <!-- compile proto buffer files using copied protoc binary -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-antrun-plugin</artifactId>
-                <version>${maven-antrun-plugin-version}</version>
                 <executions>
                     <execution>
                         <id>exec-protoc</id>
@@ -292,7 +178,6 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
-                <version>${build-helper-maven-plugin-version}</version>
                 <executions>
                     <execution>
                         <id>add-classes</id>
@@ -308,130 +193,10 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>${maven-surefire-plugin-version}</version>
-                <executions>
-                    <execution>
-                        <id>default-test</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>test</goal>
-                        </goals>
-                        <configuration>
-                            <argLine>${surefireArgLine}</argLine>
-                        </configuration>
-                    </execution>
-                </executions>
-                <configuration>
-                    <!-- Sets the VM argument line used when unit tests are 
-                        run. -->
-                    <argLine>${surefireArgLine}</argLine>
-                    <!-- Skips unit tests if the value of skip.unit.tests 
-                        property is true -->
-                    <!-- <skipTests>${skip.unit.tests}</skipTests> -->
-                    <skipTests>${skipTests}</skipTests>
-                    <!-- Excludes integration tests when unit tests are run. -->
-                    <excludes>
-                        <exclude>**/IT*.java</exclude>
-                    </excludes>
-                    <!-- Includes specific categories when unit tests are 
-                        run. -->
-                    <groups>io.nats.stan.UnitTest</groups>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <version>${maven-failsafe-plugin-version}</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>integration-test</goal>
-                            <goal>verify</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <groups>io.nats.stan.IntegrationTest</groups>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>${maven-compiler-plugin-version}</version>
-                <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
-                </configuration>
-            </plugin>
-            <!-- <plugin> <groupId>org.xolstice.maven.plugins</groupId> <artifactId>protobuf-maven-plugin</artifactId> 
-                <version>${protobuf-maven-plugin-version}</version> <extensions>true</extensions> 
-                <configuration> <protocExecutable>${project.build.directory}/protoc-${protobuf-java-version}-${os.detected.classifier}.exe</protocExecutable> 
-                <additionalProtoPathElements>${GOPATH}/src</additionalProtoPathElements> 
-                </configuration> <executions> <execution> <goals> <goal>compile</goal> <goal>test-compile</goal> 
-                </goals> </execution> </executions> </plugin> -->
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <version>${jacoco-maven-plugin-version}</version>
-                <configuration>
-                    <excludes>
-                        <exclude>**/protobuf/*</exclude>
-                    </excludes>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>default-prepare-agent</id>
-                        <goals>
-                            <goal>prepare-agent</goal>
-                        </goals>
-                        <configuration>
-                            <!-- Sets the name of the property containing 
-                                the settings for JaCoCo runtime agent. -->
-                            <propertyName>surefireArgLine</propertyName>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>default-report</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>default-check</id>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                        <configuration>
-                            <rules>
-                                <!-- implementation is needed only for Maven 
-                                    2 -->
-                                <rule
-                                    implementation="org.jacoco.maven.RuleConfiguration">
-                                    <element>BUNDLE</element>
-                                    <limits>
-                                        <!-- implementation is needed only 
-                                            for Maven 2 -->
-                                        <limit
-                                            implementation="org.jacoco.report.check.Limit">
-                                            <counter>COMPLEXITY</counter>
-                                            <value>COVEREDRATIO</value>
-                                            <minimum>0.60</minimum>
-                                        </limit>
-                                    </limits>
-                                </rule>
-                            </rules>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
+            <!-- this should go away when the repo is public. -->
             <plugin>
                 <groupId>org.eluder.coveralls</groupId>
                 <artifactId>coveralls-maven-plugin</artifactId>
-                <version>${coveralls-maven-plugin-version}</version>
                 <configuration>
                     <serviceName>travis-pro</serviceName>
                     <repoToken>${env.COVERALLS_TOKEN}</repoToken>
@@ -441,24 +206,10 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>${maven-source-plugin-version}</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>${maven-javadoc-plugin-version}</version>
                 <configuration>
-                    <header>jstan ${project.version}</header>
-                    <footer>jstan ${project.version}</footer>
+                    <header>java-nats-streaming:${project.version}</header>
+                    <footer>java-nats-streaming:${project.version}</footer>
                     <author>false</author>
                     <doctitle>${project.name} (${project.version})</doctitle>
                     <!-- <stylesheetfile>${basedir}/src/main/javadoc/kenai-stylesheet.css</stylesheetfile> 
@@ -478,9 +229,9 @@
                             <failOnError>true</failOnError>
                             <show>public</show>
                             <nohelp>true</nohelp>
-                            <header>jstan ${project.version}</header>
-                            <footer>jstan ${project.version}</footer>
-                            <doctitle>jstan ${project.version}</doctitle>
+                            <header>java-nats-streaming:${project.version}</header>
+                            <footer>java-nats-streaming:${project.version}</footer>
+                            <doctitle>java-nats-streaming (${project.version})</doctitle>
                         </configuration>
                     </execution>
                 </executions>
@@ -488,64 +239,18 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-scm-publish-plugin</artifactId>
-                <version>${maven-scm-publish-plugin-version}</version>
                 <configuration>
                     <checkoutDirectory>${project.build.directory}/scmpublish</checkoutDirectory>
                     <checkinComment>Publishing javadoc for
                         ${project.artifactId}:${project.version}</checkinComment>
                     <content>${project.reporting.outputDirectory}/apidocs</content>
                     <skipDeletedFiles>true</skipDeletedFiles>
-                    <pubScmUrl>scm:git:git@github.com:nats-io/stan-java-client.git</pubScmUrl>
+                    <pubScmUrl>scm:git:git@github.com:nats-io/${project.artifactId}.git</pubScmUrl>
                     <scmBranch>gh-pages</scmBranch> <!-- branch with static site -->
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-release-plugin</artifactId>
-                <version>${maven-release-plugin-version}</version><!--$NO-MVN-MAN-VER$ -->
-                <configuration>
-                    <useReleaseProfile>true</useReleaseProfile>
-                    <releaseProfiles>release</releaseProfiles>
-                    <allowTimestampedSnapshots>true</allowTimestampedSnapshots>
-                    <autoVersionSubmodules>true</autoVersionSubmodules>
-                    <localCheckout>true</localCheckout>
-                    <pushChanges>false</pushChanges>
-                    <goals>deploy</goals>
-                </configuration>
-            </plugin>
         </plugins>
-
-        <extensions>
-            <extension>
-                <groupId>kr.motd.maven</groupId>
-                <artifactId>os-maven-plugin</artifactId>
-                <version>${os-maven-plugin}</version>
-            </extension>
-        </extensions>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-        </resources>
     </build>
-
-    <reporting>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>${maven-checkstyle-plugin-version}</version>
-                <reportSets>
-                    <reportSet>
-                        <reports>
-                            <report>checkstyle</report>
-                        </reports>
-                    </reportSet>
-                </reportSets>
-            </plugin>
-        </plugins>
-    </reporting>
 
     <profiles>
         <profile>
@@ -604,7 +309,6 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
-                        <version>${maven-surefire-plugin-version}</version>
                         <configuration>
                             <groups>io.nats.stan.UnitTest</groups>
                             <argLine>${argLine}</argLine>
@@ -629,7 +333,6 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
-                        <version>${maven-surefire-plugin-version}</version>
                         <configuration>
                             <groups>io.nats.stan.BenchmarkTest</groups>
                         </configuration>
