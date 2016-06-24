@@ -6,9 +6,8 @@ before_install:
   -out $GPG_DIR/pubring.gpg -d
 - openssl aes-256-cbc -pass pass:$ENCRYPTION_PASSWORD -in $GPG_DIR/secring.gpg.enc
   -out $GPG_DIR/secring.gpg -d
-- echo -e "machine github.com\n login $TRAVIS_CI_TOKEN" >> ~/.netrc
 install:
-- go get github.com/nats-io/stan-server
+- go get github.com/nats-io/nats-streaming-server
 - sudo apt-get update
 - sudo apt-get install -y gnupg2
 language: java
