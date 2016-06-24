@@ -13,31 +13,31 @@
     </parent>
 
     <groupId>io.nats</groupId>
-    <artifactId>java-stan</artifactId>
+    <artifactId>java-nats-streaming</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>java-stan</name>
-    <description>Java client library for STAN</description>
-    <url>https://github.com/nats-io/java-stan</url>
+    <name>java-nats-streaming</name>
+    <description>Java client library for NATS Streaming</description>
+    <url>https://github.com/nats-io/java-nats-streaming</url>
     <inceptionYear>2016</inceptionYear>
     <organization>
         <url>http://nats.io</url>
         <name>Apcera, Inc.</name>
     </organization>
     <scm>
-        <url>https://github.com/nats-io/java-stan</url>
-        <connection>scm:git:git://github.com/nats-io/java-stan.git</connection>
-        <developerConnection>scm:git:git@github.com:nats-io/java-stan.git</developerConnection>
+        <url>https://github.com/nats-io/java-nats-streaming</url>
+        <connection>scm:git:git://github.com/nats-io/java-nats-streaming.git</connection>
+        <developerConnection>scm:git:git@github.com:nats-io/java-nats-streaming.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
     <issueManagement>
-        <url>https://github.com/nats-io/java-stan/issues/</url>
+        <url>https://github.com/nats-io/java-nats-streaming/issues/</url>
         <system>GitHub Issues</system>
     </issueManagement>
     <ciManagement>
         <system>Travis</system>
-        <url>https://travis-ci.org/nats-io/java-stan/</url>
+        <url>https://travis-ci.org/nats-io/java-nats-streaming/</url>
     </ciManagement>
 
     <properties>
@@ -47,6 +47,11 @@
 
         <!-- library versions -->
         <jnats-version>0.5.0-SNAPSHOT</jnats-version>
+        
+        <!-- plugin configuration -->
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        
     </properties>
 
     <dependencyManagement />
@@ -203,8 +208,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <configuration>
-                    <header>java-stan:${project.version}</header>
-                    <footer>java-stan:${project.version}</footer>
+                    <header>java-nats-streaming:${project.version}</header>
+                    <footer>java-nats-streaming:${project.version}</footer>
                     <author>false</author>
                     <doctitle>${project.name} (${project.version})</doctitle>
                     <!-- <stylesheetfile>${basedir}/src/main/javadoc/kenai-stylesheet.css</stylesheetfile> 
@@ -224,9 +229,9 @@
                             <failOnError>true</failOnError>
                             <show>public</show>
                             <nohelp>true</nohelp>
-                            <header>java-stan:${project.version}</header>
-                            <footer>java-stan:${project.version}</footer>
-                            <doctitle>java-stan (${project.version})</doctitle>
+                            <header>java-nats-streaming:${project.version}</header>
+                            <footer>java-nats-streaming:${project.version}</footer>
+                            <doctitle>java-nats-streaming (${project.version})</doctitle>
                         </configuration>
                     </execution>
                 </executions>
