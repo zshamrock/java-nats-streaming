@@ -3,7 +3,7 @@
 NATS Streaming is an extremely performant, lightweight reliable streaming platform powered by NATS.
 
 [![License MIT](https://img.shields.io/npm/l/express.svg)](http://opensource.org/licenses/MIT)
-[![Build Status](https://travis-ci.com/nats-io/java-nats-streaming.svg?token=CV9LxEaCaFihq8PsFhqq&branch=master)](http://travis-ci.com/nats-io/java-nats-streaming)
+[![Build Status](https://travis-ci.org/nats-io/java-nats-streaming.svg?token=CV9LxEaCaFihq8PsFhqq&branch=master)](http://travis-ci.org/nats-io/java-nats-streaming)
 [![Coverage Status](https://coveralls.io/repos/github/nats-io/java-nats-streaming/badge.svg?branch=master&t=YxbrCO)](https://coveralls.io/github/nats-io/java-nats-streaming?branch=master)
 [![Javadoc](http://javadoc-badge.appspot.com/io.nats/java-nats-streaming.svg?label=javadoc)](http://nats-io.github.io/java-nats-streaming)
 
