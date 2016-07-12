@@ -10,7 +10,7 @@ before_install:
 install:
 - go get github.com/nats-io/nats-streaming-server
 - sudo apt-get update
-- sudo apt-get install -y gnupg2
+- sudo apt-get install -y gnupg
 language: java
 jdk:
 - oraclejdk8
