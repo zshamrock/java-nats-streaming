@@ -19,6 +19,7 @@ cache:
   - "$HOME/.m2"
 after_success:
 - mvn jacoco:report coveralls:jacoco
+- scripts/deploy.sh
 notifications:
   email:
   - larry@apcera.com
