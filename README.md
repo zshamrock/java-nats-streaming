@@ -138,6 +138,10 @@ sc.subscribe("foo", new MessageHandler() {
 // client receives messages 41-current
 ```
 
+### Wildcard Subscriptions
+
+NATS Streaming subscriptions **do not** support wildcards.
+
 ## Advanced Usage 
 
 ### Asynchronous Publishing
