@@ -1,29 +1,41 @@
-before_install:
-- export GOPATH=$HOME/gopath
-- eval "$(GIMME_GO_VERSION=1.6 gimme)"
-- export PATH=$PATH:$GOPATH/bin
-- export JAVA_OPTS=-Xmx2g
-- openssl aes-256-cbc -pass pass:$ENCRYPTION_PASSWORD -in $GPG_DIR/pubring.gpg.enc
-  -out $GPG_DIR/pubring.gpg -d
-- openssl aes-256-cbc -pass pass:$ENCRYPTION_PASSWORD -in $GPG_DIR/secring.gpg.enc
-  -out $GPG_DIR/secring.gpg -d
-install:
-- go get github.com/nats-io/nats-streaming-server
-- sudo apt-get update
-- sudo apt-get install -y gnupg
 language: java
 jdk:
 - oraclejdk8
+before_install:
+- echo "MAVEN_OPTS='-Xmx2g -XX:+TieredCompilation -XX:TieredStopAtLevel=1'" > ~/.mavenrc
+- export GOPATH=$HOME/gopath
+- eval "$(GIMME_GO_VERSION=1.6 gimme)"
+- export PATH=$PATH:$GOPATH/bin
+install:
+- sudo apt-get -qq update
+- go get github.com/nats-io/nats-streaming-server
+- sudo apt-get install -y gnupg
+script:
+- mvn --settings .travis/settings.xml clean verify
+after_success:
+- mvn --settings .travis/settings.xml coveralls:report
+deploy:
+- provider: script
+  skip_cleanup: true
+  script: ".travis/deploy.sh"
+  on:
+    repo: nats-io/java-nats-streaming
+    branch: master
+    jdk: oraclejdk8
+- provider: script
+  skip_cleanup: true
+  script: ".travis/deploy.sh"
+  on:
+    repo: nats-io/java-nats-streaming
+    tags: true
+    jdk: oraclejdk8
 cache:
   directories:
   - "$HOME/.m2"
-after_success:
-- mvn jacoco:report coveralls:jacoco
-- scripts/deploy.sh
 notifications:
   email:
   - larry@apcera.com
 env:
   global:
-  - GPG_DIR=${TRAVIS_BUILD_DIR}/keyrings
+  - GPG_DIR=${TRAVIS_BUILD_DIR}/.travis/keyrings
   - secure: f/nZe2pSszPmZCETOuECHALtaCoVc1+Tti47IzWy93gLps4ReVopNnRk46GYuR4nkdJeWKYQT4KnV+KK+P1ev5vVIidrX3qtAPnjsQs5DeZSPSQ/PJu2mgYqE6Mn5zdexzrBn6AvqaBpZ2MZaRnT8+FQalRGixvi5IlJH1mWMOvyHnG7Vwp9OHgpWdnaIaYv7ieMX+aHBC9o8TfAQAbR11GDqXdkXNAoS+a5sy18B2KbKqXjPNoZjqhsI6dbc1I4bptk+6o/I6cGJK5TYcZbDijDMqvnUz711owcW09Cj6hklYJBsStjLgfAM7cGhqFTeJ0ymxw6HWDWY5v0vX8Hs4pJEfdfrFMwZJctdy9AxCzyWVnCpBfWdWEx4Kb2DttzmmEVQOtIrUlbAERbUbNjsXtfwJLoZoqDvg8aoQWU4vcgY6wgN3wXcRTnBucAY3RCabuVMql+aHGD2obFY9YkyxWE0o0p345C7CVD6rROSrwSSx0uw27QQwbRwKWfzj9PnFkjgSc5sQViAhfWcZ5opMzHfmbGQ54IWqwqrl9Bww004ayJeQgOn1TuKIJQRH+84vmtrOqqb+OZoG39ye9W8bjzfn6Bh3omY+UoSOzTRh5oWjTOAPRnELPV/VsXgMZ8etBD5of8SBcWB2KpZ20kXmWnrc/A9twfeCwbOGHZWl8=
