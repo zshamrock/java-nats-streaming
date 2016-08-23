@@ -54,7 +54,7 @@
         <protobuf.output.directory>${project.build.directory}/generated-sources</protobuf.output.directory>
 
         <!-- library versions -->
-        <jnats-version>0.5.0-SNAPSHOT</jnats-version>
+        <jnats-version>0.5.1</jnats-version>
 
         <!-- plugin configuration -->
         <maven.compiler.source>1.8</maven.compiler.source>
