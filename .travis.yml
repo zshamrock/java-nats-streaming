@@ -11,7 +11,7 @@ install:
 - go get github.com/nats-io/nats-streaming-server
 - sudo apt-get install -y gnupg
 script:
-- mvn --settings .travis/settings.xml clean verify
+- mvn --settings .travis/settings.xml clean verify -U
 after_success:
 - mvn --settings .travis/settings.xml coveralls:report
 deploy:
