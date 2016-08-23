@@ -2,6 +2,10 @@ language: java
 jdk:
 - oraclejdk8
 before_install:
+#- openssl aes-256-cbc -K $encrypted_ddc2c9dfa8f8_key -iv $encrypted_ddc2c9dfa8f8_iv
+#  -in .travis/keyrings/secring.gpg.enc -out .travis/keyrings/secring.gpg -d
+#- openssl aes-256-cbc -K $encrypted_ddc2c9dfa8f8_key -iv $encrypted_ddc2c9dfa8f8_iv
+#  -in .travis/keyrings/pubring.gpg.enc -out .travis/keyrings/pubring.gpg -d
 - echo "MAVEN_OPTS='-Xmx2g -XX:+TieredCompilation -XX:TieredStopAtLevel=1'" > ~/.mavenrc
 - export GOPATH=$HOME/gopath
 - eval "$(GIMME_GO_VERSION=1.6 gimme)"
