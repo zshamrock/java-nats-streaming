@@ -175,8 +175,7 @@
                                     <arg value="-I" />
                                     <arg value="${protobuf.input.directory}" />
                                     <arg value="--proto_path" />
-                                    <arg
-                                        value="/usr/local/include" />
+                                    <arg value="/usr/local/include" />
                                     <arg value="--java_out" />
                                     <arg value="${protobuf.output.directory}" />
                                     <arg line="${protobuf.input.filepaths}" />
@@ -244,6 +243,10 @@
                             <!-- Sets the output directory for the code coverage 
                                 report. -->
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
+                            <!-- Exclude protobuf-generated sources -->
+                            <excludes>
+                                <exclude>io/nats/stan/protobuf/*.class</exclude>
+                            </excludes>
                         </configuration>
                     </execution>
                     <!-- Prepares the property pointing to the JaCoCo runtime 
@@ -278,6 +281,10 @@
                             <!-- Sets the output directory for the code coverage 
                                 report. -->
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco-it</outputDirectory>
+                            <!-- Exclude protobuf-generated sources -->
+                            <excludes>
+                                <exclude>io/nats/stan/protobuf/*.class</exclude>
+                            </excludes>
                         </configuration>
                     </execution>
                 </executions>
