@@ -14,6 +14,11 @@ script:
 - mvn --settings .travis/settings.xml clean verify -U
 after_success:
 - mvn --settings .travis/settings.xml coveralls:report
+before_deploy:
+- echo "decrypting keyrings"
+- openssl aes-256-cbc -K $encrypted_ddc2c9dfa8f8_key -iv $encrypted_ddc2c9dfa8f8_iv -in $GPG_DIR/deploy_key.pem.enc -out $GPG_DIR/deploy_key.pem -d
+- openssl aes-256-cbc -K $encrypted_ddc2c9dfa8f8_key -iv $encrypted_ddc2c9dfa8f8_iv -in $GPG_DIR/pubring.gpg.enc -out $GPG_DIR/pubring.gpg -d
+- openssl aes-256-cbc -K $encrypted_ddc2c9dfa8f8_key -iv $encrypted_ddc2c9dfa8f8_iv -in $GPG_DIR/secring.gpg.enc -out $GPG_DIR/secring.gpg -d
 deploy:
 - provider: script
   skip_cleanup: true
