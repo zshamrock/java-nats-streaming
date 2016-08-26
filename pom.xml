@@ -111,6 +111,7 @@
                     an OSGi Bundle -->
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
+                <version>3.2.0</version>
                 <extensions>true</extensions>
             </plugin>
             <plugin>
