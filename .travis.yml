@@ -2,9 +2,8 @@ language: java
 jdk:
 - oraclejdk8
 before_install:
-- mkdir -p gnatsd
-- wget https://github.com/nats-io/gnatsd/releases/download/v0.9.4/gnatsd-v0.9.4-linux-amd64.tar.gz -qO - | tar -zxvC gnatsd/
-- export PATH=$PATH:${TRAVIS_BUILD_DIR}/gnatsd
+- wget https://github.com/nats-io/nats-streaming-server/releases/download/v0.2.2/nats-streaming-server-linux-amd64.zip -q
+- export PATH=$PATH:${TRAVIS_BUILD_DIR}/nats-streaming-server-linux-amd64
 - echo "MAVEN_OPTS='-Xmx2g -XX:+TieredCompilation -XX:TieredStopAtLevel=1'" > ~/.mavenrc
 install:
 - sudo apt-get -qq update
