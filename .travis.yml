@@ -6,8 +6,7 @@ before_install:
 - export PATH=$PATH:${TRAVIS_BUILD_DIR}/nats-streaming-server-linux-amd64
 - echo "MAVEN_OPTS='-Xmx2g -XX:+TieredCompilation -XX:TieredStopAtLevel=1'" > ~/.mavenrc
 install:
-- sudo apt-get -qq update
-- go get github.com/nats-io/nats-streaming-server
+#- sudo apt-get -qq update
 - sudo apt-get install -y gnupg2
 script:
 - mvn --settings .travis/settings.xml clean verify -U
