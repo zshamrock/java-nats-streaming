@@ -2,10 +2,10 @@ language: java
 jdk:
 - oraclejdk8
 before_install:
+- mkdir -p bin
+- wget https://github.com/nats-io/gnatsd/releases/download/v0.9.4/gnatsd-v0.9.4-linux-amd64.tar.gz -qO - | tar -zxvC bin/
+- export PATH=$PATH:${TRAVIS_BUILD_DIR}/bin
 - echo "MAVEN_OPTS='-Xmx2g -XX:+TieredCompilation -XX:TieredStopAtLevel=1'" > ~/.mavenrc
-- export GOPATH=$HOME/gopath
-- eval "$(GIMME_GO_VERSION=1.6 gimme)"
-- export PATH=$PATH:$GOPATH/bin
 install:
 - sudo apt-get -qq update
 - go get github.com/nats-io/nats-streaming-server
@@ -44,4 +44,3 @@ notifications:
 env:
   global:
   - GPG_DIR=${TRAVIS_BUILD_DIR}/.travis/keyrings
-  - secure: f/nZe2pSszPmZCETOuECHALtaCoVc1+Tti47IzWy93gLps4ReVopNnRk46GYuR4nkdJeWKYQT4KnV+KK+P1ev5vVIidrX3qtAPnjsQs5DeZSPSQ/PJu2mgYqE6Mn5zdexzrBn6AvqaBpZ2MZaRnT8+FQalRGixvi5IlJH1mWMOvyHnG7Vwp9OHgpWdnaIaYv7ieMX+aHBC9o8TfAQAbR11GDqXdkXNAoS+a5sy18B2KbKqXjPNoZjqhsI6dbc1I4bptk+6o/I6cGJK5TYcZbDijDMqvnUz711owcW09Cj6hklYJBsStjLgfAM7cGhqFTeJ0ymxw6HWDWY5v0vX8Hs4pJEfdfrFMwZJctdy9AxCzyWVnCpBfWdWEx4Kb2DttzmmEVQOtIrUlbAERbUbNjsXtfwJLoZoqDvg8aoQWU4vcgY6wgN3wXcRTnBucAY3RCabuVMql+aHGD2obFY9YkyxWE0o0p345C7CVD6rROSrwSSx0uw27QQwbRwKWfzj9PnFkjgSc5sQViAhfWcZ5opMzHfmbGQ54IWqwqrl9Bww004ayJeQgOn1TuKIJQRH+84vmtrOqqb+OZoG39ye9W8bjzfn6Bh3omY+UoSOzTRh5oWjTOAPRnELPV/VsXgMZ8etBD5of8SBcWB2KpZ20kXmWnrc/A9twfeCwbOGHZWl8=
