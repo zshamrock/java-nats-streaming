@@ -318,7 +318,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>${maven-surefire-plugin-version}</version>
                 <executions>
                     <!-- Ensures that both integration-test and verify goals 
                         of the Failsafe Maven plugin are executed. -->
@@ -430,7 +429,6 @@
                     <plugin>
                         <groupId>org.sonatype.plugins</groupId>
                         <artifactId>nexus-staging-maven-plugin</artifactId>
-                        <version>${nexus-staging-maven-plugin}</version>
                         <extensions>true</extensions>
                         <configuration>
                             <serverId>ossrh</serverId>
