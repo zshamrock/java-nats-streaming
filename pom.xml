@@ -66,6 +66,7 @@
 
         <!-- project-specific plugin versions -->
         <jnats-version>0.6.0-SNAPSHOT</jnats-version>
+        <server.version>0.2.2</server.version>
     </properties>
 
     <dependencyManagement />
@@ -86,6 +87,16 @@
         </dependency>
 
         <!-- TEST -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
@@ -188,6 +199,31 @@
                             <goal>run</goal>
                         </goals>
                     </execution>
+                    <execution>
+                        <id>copy-test-server</id>
+                        <phase>generate-test-resources</phase>
+                        <configuration>
+                            <target>
+                                <echo
+                                    message="Downloading nats-streaming-server-v${server.version} for ${nats.os}-${nats.arch}..." />
+                                <get
+                                    src="https://github.com/nats-io/nats-streaming-server/releases/download/v${server.version}/nats-streaming-server-${nats.os}-${nats.arch}.zip"
+                                    dest="${project.build.directory}"
+                                    skipexisting="true" />
+                                <unzip
+                                    src="${project.build.directory}/nats-streaming-server-${nats.os}-${nats.arch}.zip"
+                                    dest="${project.build.directory}" />
+                                <move
+                                    file="${project.build.directory}/nats-streaming-server-${nats.os}-${nats.arch}/nats-streaming-server"
+                                    tofile="${project.build.directory}/nats-streaming-server" />
+                                <chmod perm="+x"
+                                    file="${project.build.directory}/nats-streaming-server" />
+                            </target>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>                    
                 </executions>
             </plugin>
 
