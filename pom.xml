@@ -25,6 +25,13 @@
         <url>http://nats.io</url>
         <name>Apcera, Inc.</name>
     </organization>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>http://www.opensource.org/licenses/mit-license.php</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
     <scm>
         <url>https://github.com/nats-io/java-nats-streaming</url>
         <connection>scm:git:git://github.com/nats-io/java-nats-streaming.git</connection>
@@ -53,13 +60,12 @@
         <protobuf.input.directory>${project.basedir}/src/main/proto</protobuf.input.directory>
         <protobuf.output.directory>${project.build.directory}/generated-sources</protobuf.output.directory>
 
-        <!-- library versions -->
-        <jnats-version>0.5.1</jnats-version>
-
         <!-- plugin configuration -->
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
 
+        <!-- project-specific plugin versions -->
+        <jnats-version>0.5.1</jnats-version>
     </properties>
 
     <dependencyManagement />
@@ -68,6 +74,7 @@
         <dependency>
             <groupId>io.nats</groupId>
             <artifactId>jnats</artifactId>
+            <version>${jnats-version}</version>
         </dependency>
         <dependency>
             <groupId>com.google.protobuf</groupId>
@@ -113,7 +120,7 @@
                 <executions>
                     <execution>
                         <id>copy-protoc</id>
-                        <!--  have to use initialize phase to ensure ordering -->
+                        <!-- have to use initialize phase to ensure ordering -->
                         <phase>initialize</phase>
                         <goals>
                             <goal>copy</goal>
