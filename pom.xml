@@ -2,7 +2,8 @@
     and the accompanying materials are made available under the terms of the 
     MIT License (MIT) which accompanies this distribution, and is available at 
     http://opensource.org/licenses/MIT -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
@@ -13,7 +14,7 @@
 
     <groupId>io.nats</groupId>
     <artifactId>java-nats-streaming</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.1.2-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
     <name>java-nats-streaming</name>
@@ -120,8 +121,6 @@
     </dependencies>
 
     <build>
-
-        <!-- copy protoc binary artifact -->
         <plugins>
             <plugin>
                 <!-- This plugin takes care of packaging the artifact as 
@@ -130,6 +129,7 @@
                 <artifactId>maven-bundle-plugin</artifactId>
                 <extensions>true</extensions>
             </plugin>
+            <!-- copy protoc binary artifact -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -172,17 +172,24 @@
                         <phase>generate-sources</phase>
                         <configuration>
                             <target>
-                                <property name="protoc.filename" value="protoc-${protobuf-java-version}-${os.detected.classifier}.exe" />
-                                <property name="protoc.filepath" value="${project.build.directory}/${protoc.filename}" />
-                                <chmod file="${protoc.filepath}" perm="ugo+rx" />
+                                <property name="protoc.filename"
+                                    value="protoc-${protobuf-java-version}-${os.detected.classifier}.exe" />
+                                <property name="protoc.filepath"
+                                    value="${project.build.directory}/${protoc.filename}" />
+                                <chmod file="${protoc.filepath}"
+                                    perm="ugo+rx" />
                                 <mkdir dir="${protobuf.output.directory}" />
                                 <path id="protobuf.input.filepaths.path">
-                                    <fileset dir="${protobuf.input.directory}">
+                                    <fileset
+                                        dir="${protobuf.input.directory}">
                                         <include name="*.proto" />
                                     </fileset>
                                 </path>
-                                <pathconvert pathsep=" " property="protobuf.input.filepaths" refid="protobuf.input.filepaths.path" />
-                                <exec executable="${protoc.filepath}" failonerror="true">
+                                <pathconvert pathsep=" "
+                                    property="protobuf.input.filepaths"
+                                    refid="protobuf.input.filepaths.path" />
+                                <exec executable="${protoc.filepath}"
+                                    failonerror="true">
                                     <arg value="-I" />
                                     <arg value="${protobuf.input.directory}" />
                                     <arg value="--proto_path" />
@@ -201,16 +208,32 @@
                         <id>prepare</id>
                         <phase>generate-test-resources</phase>
                         <configuration>
-                            <target xmlns:unless="ant:unless" xmlns:if="ant:if" name="copy-server-exec" unless:true="${server.installed}">
-                                <condition property="server.installed" else="false">
-                                    <available file="${server.exec.name}" filepath="${project.build.directory}" type="file" />
+                            <target xmlns:unless="ant:unless"
+                                xmlns:if="ant:if" name="copy-server-exec"
+                                unless:true="${server.installed}">
+                                <condition property="server.installed"
+                                    else="false">
+                                    <available file="${server.exec.name}"
+                                        filepath="${project.build.directory}"
+                                        type="file" />
                                 </condition>
-                                <echo if:true="${server.installed}" message="${server.exec.name} is already installed. Skipping download..." />
-                                <echo unless:true="${server.installed}" message="Installing ${server.exec.pkg} as ${project.build.directory}/${server.exec.name}..." />
-                                <get unless:true="${server.installed}" src="${server.exec.pkg.url}" dest="${project.build.directory}" skipexisting="true" />
-                                <unzip unless:true="${server.installed}" src="${project.build.directory}/${server.exec.pkg}.zip" dest="${project.build.directory}" overwrite="false" />
-                                <move unless:true="${server.installed}" file="${project.build.directory}/${server.exec.pkg}/${server.exec.name}" tofile="${project.build.directory}/${server.exec.name}" overwrite="false" />
-                                <chmod perm="+x" file="${project.build.directory}/${server.exec.name}" />
+                                <echo if:true="${server.installed}"
+                                    message="${server.exec.name} is already installed. Skipping download..." />
+                                <echo unless:true="${server.installed}"
+                                    message="Installing ${server.exec.pkg} as ${project.build.directory}/${server.exec.name}..." />
+                                <get unless:true="${server.installed}"
+                                    src="${server.exec.pkg.url}" dest="${project.build.directory}"
+                                    skipexisting="true" />
+                                <unzip unless:true="${server.installed}"
+                                    src="${project.build.directory}/${server.exec.pkg}.zip"
+                                    dest="${project.build.directory}"
+                                    overwrite="false" />
+                                <move unless:true="${server.installed}"
+                                    file="${project.build.directory}/${server.exec.pkg}/${server.exec.name}"
+                                    tofile="${project.build.directory}/${server.exec.name}"
+                                    overwrite="false" />
+                                <chmod perm="+x"
+                                    file="${project.build.directory}/${server.exec.name}" />
                             </target>
                         </configuration>
                         <goals>
