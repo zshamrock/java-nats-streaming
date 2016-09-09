@@ -456,6 +456,7 @@ public class ConnectionImplTest {
         String subj = "testPublishStringByteArrayThrowsEx";
         byte[] payload = "Hello World".getBytes();
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
+            @SuppressWarnings("unchecked")
             Channel<Exception> mockCh = (Channel<Exception>) mock(Channel.class);
             when(mockCh.getCount()).thenReturn(1);
             when(mockCh.get()).thenReturn(new IOException("test exception"));
