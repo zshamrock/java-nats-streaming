@@ -1,9 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the MIT License (MIT)
- * which accompanies this distribution, and is available at
- * http://opensource.org/licenses/MIT
+ * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ * materials are made available under the terms of the MIT License (MIT) which accompanies this
+ * distribution, and is available at http://opensource.org/licenses/MIT
  *******************************************************************************/
 
 package io.nats.stan;
@@ -86,7 +84,7 @@ public class SubscriptionImplTest {
     public void testSubscriptionImplStringStringMessageHandlerConnectionImplSubscriptionOptions() {
         ConnectionImpl conn = null;
         try {
-            conn = newMockedConnection();
+            conn = (ConnectionImpl) newMockedConnection();
         } catch (IOException | TimeoutException e) {
             /* NOOP */
         }
@@ -164,7 +162,7 @@ public class SubscriptionImplTest {
      */
     @Test
     public void testUnsubscribe() throws IOException, TimeoutException {
-        ConnectionImpl conn = newMockedConnection();
+        ConnectionImpl conn = (ConnectionImpl) newMockedConnection();
         SubscriptionOptions opts = new SubscriptionOptions.Builder().build();
         try (Subscription sub = conn.subscribe("foo", null, opts)) {
             SubscriptionResponse sr = SubscriptionResponse.newBuilder().build();
@@ -185,7 +183,7 @@ public class SubscriptionImplTest {
     public void testUnsubscribeInboxWarning() throws IOException, TimeoutException {
         ConnectionImpl conn = null;
         try {
-            conn = newMockedConnection();
+            conn = (ConnectionImpl) newMockedConnection();
         } catch (IOException | TimeoutException e) {
             /* NOOP */
         }
@@ -221,7 +219,7 @@ public class SubscriptionImplTest {
     public void testUnsubscribeTimeout() throws TimeoutException {
         ConnectionImpl conn = null;
         try {
-            conn = newMockedConnection();
+            conn = (ConnectionImpl) newMockedConnection();
         } catch (IOException | TimeoutException e) {
             /* NOOP */
         }
@@ -256,7 +254,7 @@ public class SubscriptionImplTest {
     public void testUnsubscribeThrowsIoEx() throws IOException {
         ConnectionImpl conn = null;
         try {
-            conn = newMockedConnection();
+            conn = (ConnectionImpl) newMockedConnection();
         } catch (IOException | TimeoutException e) {
             /* NOOP */
         }
@@ -297,7 +295,7 @@ public class SubscriptionImplTest {
         thrown.expect(IllegalStateException.class);
         thrown.expectMessage(ConnectionImpl.ERR_BAD_SUBSCRIPTION);
 
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             SubscriptionOptions opts = new SubscriptionOptions.Builder().build();
             try (Subscription sub = conn.subscribe("foo", null, opts)) {
                 SubscriptionResponse sr = SubscriptionResponse.newBuilder().build();
@@ -317,7 +315,7 @@ public class SubscriptionImplTest {
         thrown.expect(IllegalStateException.class);
         thrown.expectMessage(ConnectionImpl.ERR_CONNECTION_CLOSED);
 
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             SubscriptionOptions opts = new SubscriptionOptions.Builder().build();
             try (Subscription sub = conn.subscribe("foo", null, opts)) {
                 SubscriptionResponse sr = SubscriptionResponse.newBuilder().build();
@@ -334,7 +332,7 @@ public class SubscriptionImplTest {
 
     @Test
     public void testCloseSuccess() throws IOException, TimeoutException {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             SubscriptionOptions opts = new SubscriptionOptions.Builder().build();
             SubscriptionImpl sub =
                     Mockito.spy(new SubscriptionImpl("foo", "bar", null, conn, opts));
@@ -354,7 +352,7 @@ public class SubscriptionImplTest {
     public void testCloseException() {
         ConnectionImpl conn = null;
         try {
-            conn = newMockedConnection();
+            conn = (ConnectionImpl) newMockedConnection();
         } catch (IOException | TimeoutException e) {
             /* NOOP */
         }
@@ -378,7 +376,7 @@ public class SubscriptionImplTest {
 
     @Test
     public void testCloseUnsubscribeException() throws IOException, TimeoutException {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             SubscriptionOptions opts = new SubscriptionOptions.Builder().build();
             SubscriptionImpl sub =
                     Mockito.spy(new SubscriptionImpl("foo", "bar", null, conn, opts));

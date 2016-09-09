@@ -98,6 +98,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     Timer ackTimer = new Timer(true);
 
+    boolean ncOwned = false;
+
     protected ConnectionImpl() {
 
     }
@@ -110,16 +112,17 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         this.clusterId = stanClusterId;
         this.clientId = clientId;
         this.opts = opts;
-        this.nc = opts.getNatsConn();
+        setNatsConnection(opts.getNatsConn());
     }
 
     // Connect will form a connection to the STAN subsystem.
     void connect() throws IOException, TimeoutException {
-        // Process Options
-
+        io.nats.client.Connection nc = getNatsConnection();
         // Create a NATS connection if it doesn't exist
         if (nc == null) {
             nc = createNatsConnection();
+            setNatsConnection(nc);
+            ncOwned = true;
         }
 
         // Create a heartbeat inbox
@@ -187,8 +190,11 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     }
 
     io.nats.client.Connection createNatsConnection() throws IOException, TimeoutException {
-        if (nc == null) {
+        // Create a NATS connection if it doesn't exist
+        io.nats.client.Connection nc = null;
+        if (getNatsConnection() == null) {
             nc = createNatsConnectionFactory().createConnection();
+            ncOwned = true;
         }
         return nc;
     }
@@ -199,17 +205,18 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         io.nats.client.Connection nc = null;
         this.lock();
         try {
-            if (this.nc == null) {
-                // throw new IllegalStateException(ERR_CONNECTION_CLOSED);
+            if (getNatsConnection() == null) {
+                // We are already closed
                 logger.warn("stan: NATS connection already closed");
                 return;
             }
 
             // Capture for NATS calls below
-            nc = this.nc;
+            nc = getNatsConnection();
+            // if ncOwned, we close it in finally block
 
             // Signals we are closed.
-            this.nc = null;
+            setNatsConnection(null);
 
             // Now close ourselves.
             if (getAckSubscription() != null) {
@@ -241,15 +248,15 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 }
             }
         } finally {
-            if (nc != null) {
+            if (ncOwned && (nc != null)) {
                 nc.close();
             }
             this.unlock();
         }
     }
 
-    protected AckClosure createAckClosure(String guid, AckHandler ah) {
-        return new AckClosure(guid, ah);
+    protected AckClosure createAckClosure(AckHandler ah, Channel<Exception> ch) {
+        return new AckClosure(ah, ch);
     }
 
     TimerTask createAckTimerTask(String guid, AckHandler ah) {
@@ -278,49 +285,48 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
     }
 
+    Channel<Exception> createExceptionChannel() {
+        return new Channel<Exception>();
+    }
+
     // Publish will publish to the cluster and wait for an ACK.
     @Override
     public void publish(String subject, byte[] data) throws IOException {
-        publish(subject, (String) null, data);
+        final Channel<Exception> ch = createExceptionChannel();
+        publish(subject, null, data, null, ch);
+        if (ch.getCount() != 0) {
+            throw new IOException(ch.get());
+        }
     }
 
-    // PublishAsync will publish to the cluster on pubPrefix+subject and
-    // asynchronously
-    // process the ACK or error state. It will return the GUID for the message
-    // being sent.
+    /*
+     * PublishAsync will publish to the cluster on pubPrefix+subject and asynchronously process the
+     * ACK or error state. It will return the GUID for the message being sent.
+     */
     @Override
     public String publish(String subject, byte[] data, AckHandler ah) throws IOException {
         return publish(subject, null, data, ah);
     }
 
     // PublishWithReply will publish to the cluster and wait for an ACK.
-    @Override
-    public void publish(String subject, String reply, byte[] data) throws IOException {
-        // FIXME(dlc) Pool?
-        final Channel<Exception> ech = new Channel<Exception>();
-        final Channel<String> ch = new Channel<String>();
+    // void publish(String subject, String reply, byte[] data) throws IOException {
+    // final Channel<Exception> ch = new Channel<Exception>();
+    // publish(subject, reply, data, null, ch);
+    // if (ch.getCount() != 0) {
+    // throw new IOException(ch.get());
+    // }
+    // }
 
-        AckHandler ah = new AckHandler() {
-            public void onAck(String guid, Exception ex) {
-                // System.err.println("onAck invoked");
-                if (ex != null) {
-                    ech.add(ex);
-                }
-                ch.add(guid);
-            }
-        };
-        publish(subject, reply, data, ah);
-        ch.get();
-        if (ech.getCount() != 0) {
-            throw new IOException(ech.get());
-        }
+    // PublishAsyncWithReply will publish to the cluster and asynchronously
+    // process the ACK or error state. It will return the GUID for the message being sent.
+    String publish(String subject, String reply, byte[] data, AckHandler ah) throws IOException {
+        return publish(subject, reply, data, ah, null);
     }
 
     // PublishAsyncWithReply will publish to the cluster and asynchronously
     // process the ACK or error state. It will return the GUID for the message
     // being sent.
-    @Override
-    public String publish(String subject, String reply, byte[] data, AckHandler ah)
+    String publish(String subject, String reply, byte[] data, AckHandler ah, Channel<Exception> ch)
             throws IOException {
         String subj = null;
         String ackSubject = null;
@@ -330,11 +336,14 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         final PubMsg pe;
         String guid;
         byte[] bytes;
+
+        a = createAckClosure(ah, ch);
         this.lock();
         try {
-            if (nc == null) {
+            if (getNatsConnection() == null) {
                 throw new IllegalStateException(ERR_CONNECTION_CLOSED);
             }
+
             subj = String.format("%s.%s", pubPrefix, subject);
             guid = NUID.nextGlobal();
             PubMsg.Builder pb =
@@ -347,11 +356,9 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             }
             pe = pb.build();
             bytes = pe.toByteArray();
-            a = createAckClosure(guid, ah);
 
-            // Map ack to nuid
+            // Map ack to guid
             pubAckMap.put(guid, a);
-
             // snapshot
             ackSubject = this.ackSubject;
             ackTimeout = opts.getAckTimeout();
@@ -359,6 +366,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         } finally {
             this.unlock();
         }
+
         // Use the buffered channel to control the number of outstanding acks.
         try {
             pac.put(PubAck.getDefaultInstance());
@@ -421,7 +429,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         // qgroup);
         this.lock();
         try {
-            if (nc == null) {
+            if (getNatsConnection() == null) {
                 sub = null;
                 throw new IllegalStateException(ERR_CONNECTION_CLOSED);
             }
@@ -584,6 +592,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         io.nats.stan.Message stanMsg = null;
         boolean isClosed = false;
         SubscriptionImpl sub = null;
+        io.nats.client.Connection nc = null;
 
         try {
             logger.trace("In processMsg, msg = {}", raw);
@@ -599,7 +608,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         // Lookup the subscription
         lock();
         try {
-            isClosed = (this.nc == null);
+            nc = this.nc;
+            isClosed = (nc == null);
             sub = (SubscriptionImpl) subMap.get(raw.getSubject());
         } catch (Exception e) {
             throw e;
@@ -619,19 +629,13 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         String ackSubject = null;
         boolean isManualAck = false;
         ConnectionImpl subsc = null;
-        io.nats.client.Connection nc = null;
 
         sub.rLock();
         try {
             cb = sub.getMessageHandler();
             ackSubject = sub.getAckInbox();
             isManualAck = sub.getOptions().isManualAcks();
-            subsc = sub.getConnection();
-            if (subsc != null) {
-                subsc.lock();
-                nc = subsc.getNatsConnection();
-                subsc.unlock();
-            }
+            subsc = sub.getConnection(); // Can be nil if sub has been unsubscribed
         } catch (Exception e) {
             throw e;
         } finally {
@@ -644,14 +648,16 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
 
         // Process auto-ack
-        if (!isManualAck && nc != null) {
+        if (!isManualAck && nc != null && !nc.isClosed()) {
             Ack ack = Ack.newBuilder().setSubject(stanMsg.getSubject())
                     .setSequence(stanMsg.getSequence()).build();
             try {
+                logger.trace("processMsg publishing Ack for sequence: {}", stanMsg.getSequence());
                 nc.publish(ackSubject, ack.toByteArray());
                 logger.trace("processMsg published Ack:\n{}", ack);
             } catch (IOException e) {
                 // FIXME(dlc) - Async error handler? Retry?
+                // This really won't happen since the publish is executing in the NATS thread.
                 logger.error("Exception while publishing auto-ack: {}", e.getMessage());
                 logger.debug("Stack trace: ", e);
             }
@@ -664,6 +670,10 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     protected io.nats.client.Connection getNatsConnection() {
         return this.nc;
+    }
+
+    protected void setNatsConnection(io.nats.client.Connection nc) {
+        this.nc = nc;
     }
 
     public String newInbox() {
@@ -710,11 +720,11 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     class AckClosure {
         protected TimerTask ackTask;
         AckHandler ah;
-        String guid;
+        Channel<Exception> ch;
 
-        AckClosure(final String guid, final AckHandler ah) {
+        AckClosure(final AckHandler ah, final Channel<Exception> ch) {
             this.ah = ah;
-            this.guid = guid;
+            this.ch = ch;
         }
     }
 }

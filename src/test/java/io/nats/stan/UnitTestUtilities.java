@@ -25,6 +25,7 @@ import io.nats.stan.protobuf.PubMsg;
 import io.nats.stan.protobuf.SubscriptionRequest;
 import io.nats.stan.protobuf.SubscriptionResponse;
 
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.slf4j.Logger;
@@ -43,13 +44,13 @@ class UnitTestUtilities {
     static final Logger logger = LoggerFactory.getLogger(UnitTestUtilities.class);
 
     // final Object mu = new Object();
-    static NATSServer defaultServer = null;
+    static STANServer defaultServer = null;
     Process authServerProcess = null;
 
     static final String testClusterName = "my_test_cluster";
     static final String testClientName = "me";
 
-    static ConnectionImpl newDefaultConnection(Logger log) {
+    static Connection newDefaultConnection(Logger log) {
         io.nats.client.ConnectionFactory ncf = new io.nats.client.ConnectionFactory();
         io.nats.client.Connection nc = null;
         ncf.setReconnectAllowed(false);
@@ -64,7 +65,7 @@ class UnitTestUtilities {
         scf.setClientId(testClientName);
         scf.setClusterId(testClusterName);
 
-        ConnectionImpl sc = null;
+        Connection sc = null;
         try {
             sc = scf.createConnection();
         } catch (IOException | TimeoutException e) {
@@ -73,13 +74,29 @@ class UnitTestUtilities {
         return sc;
     }
 
-    static ConnectionImpl newMockedConnection() throws IOException, TimeoutException {
+    static Connection newMockedConnection() throws IOException, TimeoutException {
         io.nats.client.Connection nc = setupMockNatsConnection();
         Options opts = new Options.Builder().setNatsConn(nc).create();
         ConnectionImpl conn = new ConnectionImpl(testClusterName, testClientName, opts);
         conn.connect();
         return conn;
     }
+
+    static Connection newMockedConnection(boolean owned) throws IOException, TimeoutException {
+        ConnectionImpl conn = null;
+        io.nats.client.Connection nc = setupMockNatsConnection();
+        if (owned) {
+            Options opts = new Options.Builder().create();
+            conn = Mockito.spy(new ConnectionImpl(testClusterName, testClientName, opts));
+            conn.nc = nc;
+            conn.ncOwned = true;
+            conn.connect();
+        } else {
+            conn = (ConnectionImpl) newMockedConnection();
+        }
+        return conn;
+    }
+
 
     protected static io.nats.client.Connection setupMockNatsConnection()
             throws IOException, TimeoutException {
@@ -205,7 +222,7 @@ class UnitTestUtilities {
 
     static synchronized void startDefaultServer(boolean debug) {
         if (defaultServer == null) {
-            defaultServer = new NATSServer(debug);
+            defaultServer = new STANServer(debug);
             try {
                 Thread.sleep(500);
             } catch (InterruptedException e) {
@@ -235,12 +252,12 @@ class UnitTestUtilities {
         authServerProcess = Runtime.getRuntime().exec("gnatsd -config auth.conf");
     }
 
-    NATSServer createServerOnPort(int port) {
+    STANServer createServerOnPort(int port) {
         return createServerOnPort(port, false);
     }
 
-    NATSServer createServerOnPort(int port, boolean debug) {
-        NATSServer nsrv = new NATSServer(port, debug);
+    STANServer createServerOnPort(int port, boolean debug) {
+        STANServer nsrv = new STANServer(port, debug);
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {
@@ -249,12 +266,12 @@ class UnitTestUtilities {
         return nsrv;
     }
 
-    NATSServer createServerWithConfig(String configFile) {
+    STANServer createServerWithConfig(String configFile) {
         return createServerWithConfig(configFile, false);
     }
 
-    NATSServer createServerWithConfig(String configFile, boolean debug) {
-        NATSServer nsrv = new NATSServer(configFile, debug);
+    STANServer createServerWithConfig(String configFile, boolean debug) {
+        STANServer nsrv = new STANServer(configFile, debug);
         sleep(500);
         return nsrv;
     }
