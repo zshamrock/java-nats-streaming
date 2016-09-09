@@ -1,9 +1,7 @@
 /*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the MIT License (MIT)
- * which accompanies this distribution, and is available at
- * http://opensource.org/licenses/MIT
+ * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ * materials are made available under the terms of the MIT License (MIT) which accompanies this
+ * distribution, and is available at http://opensource.org/licenses/MIT
  *******************************************************************************/
 
 package io.nats.stan;
@@ -76,7 +74,7 @@ public class ConnectionFactoryTest {
             ConnectionFactory cf = new ConnectionFactory(testClusterName, testClientName);
             cf.setNatsConnection(nc);
             try (Connection sc = cf.createConnection()) {
-                assertTrue(sc instanceof Connection);
+                assertTrue(sc instanceof ConnectionImpl);
             } catch (IOException | TimeoutException e) {
                 e.printStackTrace();
                 fail(e.getMessage());

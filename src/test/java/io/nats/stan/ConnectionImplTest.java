@@ -20,7 +20,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.matches;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -58,9 +57,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
@@ -167,7 +164,7 @@ public class ConnectionImplTest {
             when(ncf.createConnection()).thenReturn(nc);
             conn.connect();
             assertNotNull(conn.nc);
-            assertEquals(nc, conn.nc);
+            assertEquals(nc, conn.getNatsConnection());
         } catch (IOException | TimeoutException e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -260,7 +257,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testGetterSetters() {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             // Channel<PubAck> mockChan = mock(Channel.class);
             conn.setPubAckChan(pac);
             assertEquals(conn.getPubAckChan(), pac);
@@ -277,7 +274,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testCloseSuccess() {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             assertNotNull(conn);
             conn.close();
             assertNull(conn.nc);
@@ -288,8 +285,35 @@ public class ConnectionImplTest {
     }
 
     @Test
+    public void testCloseClosesNats() {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
+            assertNotNull(conn);
+            assertFalse(conn.ncOwned);
+            conn.ncOwned = true;
+            conn.close();
+            assertNull(conn.nc);
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
+            assertNotNull(conn);
+            assertFalse(conn.ncOwned);
+            conn.ncOwned = false;
+            conn.nc = null;
+            conn.close();
+            assertNull(conn.nc);
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+
+    }
+
+    @Test
     public void testCloseAckUnsubscribeFailure() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             assertNotNull(conn);
             io.nats.client.Subscription mockSub = mock(io.nats.client.Subscription.class);
             when(conn.getAckSubscription()).thenReturn(mockSub);
@@ -306,7 +330,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testCloseAckSubscriptionNull() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             when(conn.getAckSubscription()).thenReturn(null);
             conn.close();
             assertNull(conn.nc);
@@ -318,7 +342,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testCloseRequestTimeout() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             doThrow(new TimeoutException()).when(conn.nc).request(eq(conn.closeRequests),
                     any(byte[].class), any(long.class));
             boolean exThrown = false;
@@ -338,9 +362,11 @@ public class ConnectionImplTest {
 
     @Test
     public void testCloseRequestIoError() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection(true))) {
             doThrow(new IOException("TEST")).when(conn.nc).request(eq(conn.closeRequests),
                     any(byte[].class), any(long.class));
+            assertTrue(conn.ncOwned);
+            assertNotNull(conn.nc);
             boolean exThrown = false;
             try {
                 conn.close();
@@ -359,7 +385,7 @@ public class ConnectionImplTest {
     @Test
     public void testCloseResponseErrorThrows() {
         final String errorText = "TEST";
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             // Close response has non-empty error
             CloseResponse closeResponseProto =
                     CloseResponse.newBuilder().setError(errorText).build();
@@ -386,7 +412,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testCloseResponseNullPayload() throws IOException, TimeoutException {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             io.nats.client.Message closeResponse = new io.nats.client.Message("foo", "bar", null);
             when(conn.nc.request(eq(conn.closeRequests), any(byte[].class), any(long.class)))
                     .thenReturn(closeResponse);
@@ -402,7 +428,7 @@ public class ConnectionImplTest {
         thrown.expect(IllegalStateException.class);
         thrown.expectMessage("stan: connection closed");
 
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             conn.nc = null;
             io.nats.client.Message msg = new io.nats.client.Message();
             msg.setReplyTo("bar");
@@ -414,13 +440,27 @@ public class ConnectionImplTest {
     public void testPublishStringByteArray() {
         String subj = "testPublishStringByteArray";
         byte[] payload = "Hello World".getBytes();
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             conn.publish(subj, payload);
             verify(conn.nc).publish(matches(conn.pubPrefix + "." + subj), eq(conn.ackSubject),
                     any(byte[].class));
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
+        }
+    }
+
+    @Test
+    public void testPublishStringByteArrayThrowsEx() throws IOException, TimeoutException {
+        thrown.expect(IOException.class);
+        String subj = "testPublishStringByteArrayThrowsEx";
+        byte[] payload = "Hello World".getBytes();
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
+            Channel<Exception> mockCh = (Channel<Exception>) mock(Channel.class);
+            when(mockCh.getCount()).thenReturn(1);
+            when(mockCh.get()).thenReturn(new IOException("test exception"));
+            when(conn.createExceptionChannel()).thenReturn(mockCh);
+            conn.publish(subj, payload);
         }
     }
 
@@ -434,46 +474,39 @@ public class ConnectionImplTest {
         }
     }
 
-    @Test
-    public void testPublishStringStringByteArray() throws IOException, TimeoutException {
-        final byte[] payload = "Hello World".getBytes();
-        try (Connection conn = newMockedConnection()) {
-            // publish null msg
-            conn.publish("foo", null, payload);
-        }
-    }
-
-    @Test
-    public void testPublishStringStringByteArrayThrowsEx() throws IOException, TimeoutException {
-        thrown.expect(IOException.class);
-
-        final String exMessage = "ack exception";
-        thrown.expect(IOException.class);
-        thrown.expectMessage(exMessage);
-        final String subject = "testAckException";
-        final String reply = null;
-        final byte[] payload = "Hello World".getBytes();
-
-        // final AckHandler[] ah = new AckHandler[1];
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
-            doAnswer(new Answer<Void>() {
-                @Override
-                public Void answer(InvocationOnMock invocation) throws Throwable {
-                    Object[] args = invocation.getArguments();
-                    AckHandler ah = (AckHandler) args[3];
-                    ah.onAck("foobar", new IOException(exMessage));
-                    return null;
-                }
-            }).when(conn).publish(eq(subject), eq(reply), eq(payload), any(AckHandler.class));
-
-            // publish null msg
-            conn.publish(subject, reply, payload);
-        }
-    }
+    // @Test
+    // public void testPublishStringStringByteArrayThrowsEx() throws IOException, TimeoutException {
+    // thrown.expect(IOException.class);
+    //
+    // final String exMessage = "ack exception";
+    // thrown.expect(IOException.class);
+    // thrown.expectMessage(exMessage);
+    // final String subject = "testAckException";
+    // final String reply = null;
+    // final byte[] payload = "Hello World".getBytes();
+    //
+    // Channel<Exception> mockCh = (Channel<Exception>) mock(Channel.class);
+    //
+    // // final AckHandler[] ah = new AckHandler[1];
+    // try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
+    // doAnswer(new Answer<Void>() {
+    // @Override
+    // public Void answer(InvocationOnMock invocation) throws Throwable {
+    // Object[] args = invocation.getArguments();
+    // AckHandler ah = (AckHandler) args[3];
+    // ah.onAck("foobar", new IOException(exMessage));
+    // return null;
+    // }
+    // }).when(conn).publish(eq(subject), eq(reply), eq(payload), any(AckHandler.class));
+    //
+    // // publish null msg
+    // conn.publish(subject, reply, payload);
+    // }
+    // }
 
     @Test
     public void testPublishStringStringByteArrayAckHandler() {
-        try (Connection conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             // publish null msg
             String guid = conn.publish("foo", null, null, null);
             assertNotNull(guid);
@@ -506,7 +539,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testPublishStringStringByteArrayAckHandlerAckChannelPutInterrupted() {
-        try (final ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             // Simulate PubAckChan interruption
             conn.setPubAckChan(pac);
             doThrow(new InterruptedException()).when(pac).put(eq(PubAck.getDefaultInstance()));
@@ -528,7 +561,7 @@ public class ConnectionImplTest {
         thrown.expect(IOException.class);
         thrown.expectMessage("Test exception");
 
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             // test for interrupted channel add
             io.nats.client.Connection nc = mock(io.nats.client.Connection.class);
             doThrow(new IOException("Test exception")).when(nc).publish(any(String.class),
@@ -549,7 +582,7 @@ public class ConnectionImplTest {
             throws IOException, TimeoutException {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage("Negative delay.");
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
             ac.ah = mock(AckHandler.class);
@@ -567,7 +600,7 @@ public class ConnectionImplTest {
 
     @Test
     public void test_SubscribeNullNatsConnection() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             io.nats.client.Connection oldNc = conn.nc;
             boolean exThrown = false;
             try {
@@ -588,7 +621,7 @@ public class ConnectionImplTest {
 
     @Test(expected = TimeoutException.class)
     public void testSubscriptionRequestTimeout() throws TimeoutException {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             doThrow(new TimeoutException()).when(conn.nc).request(eq(conn.subRequests),
                     any(byte[].class), any(long.class), any(TimeUnit.class));
             conn.subscribe("foo", null);
@@ -600,7 +633,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testBasicSubscribeSuccess() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             conn.subscribe("foobar", null);
 
             conn.subscribe("foobar2", "bar", new MessageHandler() {
@@ -614,7 +647,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testBasicSubscribeDurableSuccess() {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             conn.subscribe("foo", null,
                     new SubscriptionOptions.Builder().setDurableName("my-durable").build());
         } catch (IOException | TimeoutException e) {
@@ -627,7 +660,7 @@ public class ConnectionImplTest {
     public void testBasicSubscribeProtoUnmarshalError() throws TimeoutException, IOException {
         thrown.expect(IOException.class);
         thrown.expectMessage("stan: bad request");
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             SubscriptionResponse subRespProto =
                     SubscriptionResponse.newBuilder().setError("stan: bad request").build();
             io.nats.client.Message rawSubResponse =
@@ -642,7 +675,7 @@ public class ConnectionImplTest {
     public void testBasicSubscribeProtoResponseError() throws TimeoutException, IOException {
         thrown.expect(InvalidProtocolBufferException.class);
         // thrown.expectMessage("stan: bad request");
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             byte[] payload = "Junk".getBytes();
             io.nats.client.Message rawSubResponse =
                     new io.nats.client.Message("foo", "bar", payload);
@@ -654,7 +687,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testSubscriptionStartAt() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             io.nats.client.Connection nc = conn.nc;
             SubscriptionOptions opts = null;
 
@@ -757,7 +790,7 @@ public class ConnectionImplTest {
             throws IOException, TimeoutException {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage("Can't get the number of an unknown enum value.");
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             SubscriptionOptions subOpts = new SubscriptionOptions.Builder().build();
             subOpts.startAt = StartPosition.UNRECOGNIZED;
             try {
@@ -776,7 +809,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testProcessAckSuccess() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
             ac.ah = mock(AckHandler.class);
@@ -792,7 +825,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testProcessAckTimeoutMethod() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
             ac.ah = mock(AckHandler.class);
@@ -821,10 +854,11 @@ public class ConnectionImplTest {
 
     @Test
     public void testProcessAckUnmarshalError() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckHandler ah = mock(AckHandler.class);
-            AckClosure ac = conn.createAckClosure(guid, ah);
+            Channel<Exception> ch = new Channel<Exception>();
+            AckClosure ac = conn.createAckClosure(ah, ch);
             conn.pubAckMap.put(guid, ac);
             io.nats.client.Message raw =
                     new io.nats.client.Message("foo", "bar", "junk".getBytes());
@@ -838,10 +872,11 @@ public class ConnectionImplTest {
 
     @Test
     public void testProcessAckNonEmptyErrorField() {
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckHandler ah = mock(AckHandler.class);
-            AckClosure ac = conn.createAckClosure(guid, ah);
+            Channel<Exception> ch = new Channel<Exception>();
+            AckClosure ac = conn.createAckClosure(ah, ch);
             conn.pubAckMap.put(guid, ac);
             PubAck pa = PubAck.newBuilder().setGuid(guid).setError("ERROR").build();
             io.nats.client.Message raw = new io.nats.client.Message("foo", "bar", pa.toByteArray());
@@ -855,7 +890,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testProcessHeartBeatCallbackSuccess() {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             io.nats.client.Message msg = new io.nats.client.Message();
             assertNotNull(conn.hbSubscription);
             assertNotNull(conn.hbSubscription.getSubject());
@@ -874,7 +909,7 @@ public class ConnectionImplTest {
     public void testProcessHeartBeatPublishLogsError() {
         final String error = "TEST";
         final String errorMsg = "stan: error publishing heartbeat response: " + error;
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             doThrow(new IOException(error)).when(conn.nc).publish(any(String.class), eq(null));
             io.nats.client.Message msg = new io.nats.client.Message();
             msg.setReplyTo("foo");
@@ -888,13 +923,14 @@ public class ConnectionImplTest {
 
     @Test
     public void testRemoveAckSuccess() {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             when(pac.get()).thenReturn(PubAck.getDefaultInstance());
             String guid = NUID.nextGlobal();
             TimerTask ackTask = mock(TimerTask.class);
             AckClosure ac = mock(AckClosure.class);
             ac.ackTask = ackTask;
-            ac.guid = guid;
+            Channel<Exception> ch = new Channel<Exception>();
+            ac.ch = ch;
             conn.pubAckMap.put(guid, ac);
 
             // Should return our AckClosure
@@ -919,13 +955,14 @@ public class ConnectionImplTest {
         thrown.expect(UnsupportedOperationException.class);
         thrown.expectMessage("Test");
 
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             when(pac.get()).thenReturn(PubAck.getDefaultInstance());
             String guid = NUID.nextGlobal();
             TimerTask ackTask = mock(TimerTask.class);
             AckClosure ac = mock(AckClosure.class);
             ac.ackTask = ackTask;
-            ac.guid = guid;
+            Channel<Exception> ch = new Channel<Exception>();
+            ac.ch = ch;
             conn.setPubAckMap(pubAckMap);
             doThrow(new UnsupportedOperationException("Test")).when(pubAckMap).get(guid);
             // conn.pubAckMap.put(guid, ac);
@@ -936,11 +973,12 @@ public class ConnectionImplTest {
 
     @Test
     public void testRemoveAckNullTimerTask() {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             when(pac.get()).thenReturn(PubAck.getDefaultInstance());
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
-            ac.guid = guid;
+            Channel<Exception> ch = new Channel<Exception>();
+            ac.ch = ch;
             conn.pubAckMap.put(guid, ac);
 
             assertEquals(ac, conn.removeAck(guid));
@@ -954,7 +992,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testRemoveAckNullAckClosure() {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             when(pac.get()).thenReturn(PubAck.getDefaultInstance());
             when(pac.getCount()).thenReturn(0);
             String guid = NUID.nextGlobal();
@@ -976,7 +1014,7 @@ public class ConnectionImplTest {
     public void testOnMessage() {
         // This tests the NATS message handler installed on the STAN connection
         io.nats.client.Message msg = new io.nats.client.Message();
-        try (ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             io.nats.client.MessageHandler cb = (io.nats.client.MessageHandler) conn;
             MsgProto msgp = MsgProto.newBuilder().setSubject("foo").setReply("bar").build();
             msg.setSubject("foo");
@@ -993,7 +1031,7 @@ public class ConnectionImplTest {
     @Test
     public void testProcessMsgBasicSuccess() {
         String subject = "foo";
-        try (final ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             MessageHandler mockCb = mock(MessageHandler.class);
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
@@ -1022,7 +1060,7 @@ public class ConnectionImplTest {
     @Test
     public void testProcessMsgRuntimeExceptions() {
         String subject = "foo";
-        try (final ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             conn.setSubMap(subMap);
             assertEquals(subMap, conn.getSubMap());
             MessageHandler mockCb = mock(MessageHandler.class);
@@ -1068,7 +1106,7 @@ public class ConnectionImplTest {
     @Test
     public void testProcessMsgManualAck() {
         String subject = "foo";
-        try (final ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", ConnectionImpl.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1096,7 +1134,7 @@ public class ConnectionImplTest {
     @Test
     public void testProcessMsgNullNatsConnectionReturnsEarly() {
         String subject = "foo";
-        try (final ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", ConnectionImpl.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1133,7 +1171,7 @@ public class ConnectionImplTest {
     @Test
     public void testProcessMsgSubConnIsNull() {
         String subject = "foo";
-        try (final ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", ConnectionImpl.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1165,7 +1203,7 @@ public class ConnectionImplTest {
     @Test
     public void testProcessMsgSubNatsConnIsNull() {
         String subject = "foo";
-        try (final ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", ConnectionImpl.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1196,7 +1234,7 @@ public class ConnectionImplTest {
     @Test
     public void testProcessMsgSubCbIsNull() {
         String subject = "foo";
-        try (final ConnectionImpl conn = Mockito.spy(newMockedConnection())) {
+        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", ConnectionImpl.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1224,7 +1262,7 @@ public class ConnectionImplTest {
     @Test
     public void testProcessMsgPublishAutoAckFailure() {
         String subject = "foo";
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", ConnectionImpl.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1261,7 +1299,7 @@ public class ConnectionImplTest {
 
     @Test
     public void testProcessMsgUnmarshalError() {
-        try (ConnectionImpl conn = newMockedConnection()) {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             io.nats.client.Message msg = new io.nats.client.Message();
             msg.setSubject("foo");
             msg.setData("junk".getBytes());
@@ -1311,8 +1349,9 @@ public class ConnectionImplTest {
             public void onAck(String nuid, Exception ex) {}
         };
         // fail("Need to finish this test");
-        try (ConnectionImpl conn = newMockedConnection()) {
-            AckClosure ac = conn.createAckClosure(guid, ah);
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
+            Channel<Exception> ch = new Channel<Exception>();
+            AckClosure ac = conn.createAckClosure(ah, ch);
             Map<String, AckClosure> pubAckMap = conn.getPubAckMap();
             pubAckMap.put(guid, ac);
             assertEquals(ac, pubAckMap.get(guid));

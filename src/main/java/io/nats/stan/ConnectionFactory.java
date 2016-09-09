@@ -35,7 +35,14 @@ public class ConnectionFactory {
         setClientId(clientId);
     }
 
-    public ConnectionImpl createConnection() throws IOException, TimeoutException {
+    /**
+     * Creates an active connection to a NATS Streaming server.
+     * 
+     * @return the Connection.
+     * @throws IOException if a Connection cannot be established for some reason.
+     * @throws TimeoutException if the connection timeout has been exceeded.
+     */
+    public io.nats.stan.Connection createConnection() throws IOException, TimeoutException {
         ConnectionImpl conn = new ConnectionImpl(clusterId, clientId, options());
         conn.connect();
         return conn;
