@@ -6,8 +6,6 @@
 
 package io.nats.stan;
 
-import io.nats.client.NUID;
-
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
@@ -16,7 +14,8 @@ import java.util.concurrent.TimeoutException;
  */
 public interface Connection extends AutoCloseable {
     /**
-     * Publishes the payload specified by {@code data} to the subject specified by {@code subject}.
+     * Publishes the payload specified by {@code data} to the subject specified by {@code subject},
+     * and blocks until an ACK or error is returned.
      * 
      * @param subject the subject to which the message is to be published
      * @param data the message payload
@@ -39,35 +38,6 @@ public interface Connection extends AutoCloseable {
      * @see AckHandler
      */
     String publish(String subject, byte[] data, AckHandler ah) throws IOException;
-
-    /**
-     * Publishes the payload specified by {@code data} to the subject specified by {@code subject},
-     * and blocks until an ACK or error is returned.
-     * 
-     * @param subject the subject to publish the message to
-     * @param reply the subject to which subscribers should send responses
-     * @param data the message payload
-     * @throws IOException if an I/O exception is encountered
-     * @throws IllegalStateException if the connection is closed
-     * @see AckHandler
-     */
-    void publish(String subject, String reply, byte[] data) throws IOException;
-
-    /**
-     * Publishes the payload specified by {@code data} to the subject specified by {@code subject}
-     * and asynchronously processes the ACK or error state.
-     * 
-     * @param subject the subject to publish the message to
-     * @param reply the subject to which subscribers should send responses
-     * @param data the message payload
-     * @param ah an {@code AckHandler} to process the ACK or error state
-     * @return the {@code NUID} for the published message
-     * @throws IOException if an I/O exception is encountered
-     * @throws IllegalStateException if the connection is closed
-     * @see AckHandler
-     * @see NUID
-     */
-    String publish(String subject, String reply, byte[] data, AckHandler ah) throws IOException;
 
     /**
      * Creates a {@code Subscription} with interest in a given subject, assigns the callback, and

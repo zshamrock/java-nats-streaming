@@ -13,7 +13,8 @@ import java.util.Arrays;
 import java.util.List;
 
 class STANServer implements Runnable, AutoCloseable {
-    static final String STAN_SERVER = "stan-server";
+    static final String STAN_SERVER = "nats-streaming-server";
+
     // Enable this for additional server debugging info.
     boolean debug = false;
 
@@ -65,6 +66,17 @@ class STANServer implements Runnable, AutoCloseable {
         this(null, port, false);
     }
 
+    public STANServer(int port, boolean debug) {
+        this.debug = debug;
+        psInfo = this.createProcessStartInfo();
+
+        if (port > 1023) {
+            psInfo.addArgument("-p " + String.valueOf(port));
+        }
+
+        start();
+    }
+
     public STANServer(String id, boolean debug) {
         this(id, -1, debug);
     }
@@ -93,13 +105,13 @@ class STANServer implements Runnable, AutoCloseable {
     // psInfo.addArgument("-config " + buildConfigFileName(configFile));
     // start();
     // }
-
     private ProcessStartInfo createProcessStartInfo() {
-        psInfo = new ProcessStartInfo(STAN_SERVER);
+        File target = new File("target" + "/" + STAN_SERVER);
+        String execName = target.getAbsolutePath();
+        psInfo = new ProcessStartInfo(execName);
 
         if (debug) {
-            // TODO
-            // psInfo.addArgument("-DV");
+            psInfo.addArgument("-DV");
         }
 
         return psInfo;
