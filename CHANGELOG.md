@@ -1,8 +1,8 @@
 Change Log
 ==========
 
-## Version 0.2.0-SNAPSHOT
-_2016-09-09_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.1.2...master)
+## Version 0.2.0
+_2016-09-10_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.1.2...master)
 
  * Fix `ConnectionFactory::createConnection` to return `Connection` interface vs. `ConnectionImpl`
  * Resolved several test issues, including locating/running server binary for integration tests
