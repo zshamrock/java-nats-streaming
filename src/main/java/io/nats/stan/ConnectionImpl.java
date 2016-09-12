@@ -219,8 +219,24 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             setNatsConnection(null);
 
             // Now close ourselves.
-            unsubscribe(getAckSubscription());
-            unsubscribe(hbSubscription);
+            if (getAckSubscription() != null) {
+                try {
+                    getAckSubscription().unsubscribe();
+                } catch (Exception e) {
+                    logger.warn("stan: error unsubscribing from acks during connection close");
+                    logger.debug("Full stack trace: ", e);
+                }
+            }
+
+            if (getHbSubscription() != null) {
+                try {
+                    getHbSubscription().unsubscribe();
+                } catch (Exception e) {
+                    logger.warn(
+                            "stan: error unsubscribing from heartbeats during connection close");
+                    logger.debug("Full stack trace: ", e);
+                }
+            }
 
             CloseRequest req = CloseRequest.newBuilder().setClientID(clientId).build();
             logger.trace("CLOSE request: [{}]", req);
@@ -246,17 +262,6 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 nc.close();
             }
             this.unlock();
-        }
-    }
-
-    private static void unsubscribe(io.nats.client.Subscription subscription) {
-        if (subscription != null) {
-            try {
-                subscription.unsubscribe();
-            } catch (Exception e) {
-                logger.warn("stan: error unsubscribing from acks during connection close");
-                logger.debug("Full stack trace: ", e);
-            }
         }
     }
 
@@ -695,6 +700,10 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     protected io.nats.client.Subscription getAckSubscription() {
         return this.ackSubscription;
+    }
+
+    protected io.nats.client.Subscription getHbSubscription() {
+        return this.hbSubscription;
     }
 
     // test injection setter/getters

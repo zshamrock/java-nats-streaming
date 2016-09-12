@@ -329,6 +329,23 @@ public class ConnectionImplTest {
     }
 
     @Test
+    public void testCloseHbUnsubscribeFailure() {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
+            assertNotNull(conn);
+            io.nats.client.Subscription mockSub = mock(io.nats.client.Subscription.class);
+            when(conn.getHbSubscription()).thenReturn(mockSub);
+            doThrow(new IOException("fake I/O exception")).when(mockSub).unsubscribe();
+            conn.close();
+            verifier.verifyLogMsgEquals(Level.WARN,
+                    "stan: error unsubscribing from heartbeats during connection close");
+            assertNull(conn.nc);
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+    }
+
+    @Test
     public void testCloseAckSubscriptionNull() {
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             when(conn.getAckSubscription()).thenReturn(null);
