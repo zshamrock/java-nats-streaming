@@ -228,6 +228,16 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 }
             }
 
+            if (getHbSubscription() != null) {
+                try {
+                    getHbSubscription().unsubscribe();
+                } catch (Exception e) {
+                    logger.warn(
+                            "stan: error unsubscribing from heartbeats during connection close");
+                    logger.debug("Full stack trace: ", e);
+                }
+            }
+
             CloseRequest req = CloseRequest.newBuilder().setClientID(clientId).build();
             logger.trace("CLOSE request: [{}]", req);
             byte[] bytes = req.toByteArray();
@@ -690,6 +700,10 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     protected io.nats.client.Subscription getAckSubscription() {
         return this.ackSubscription;
+    }
+
+    protected io.nats.client.Subscription getHbSubscription() {
+        return this.hbSubscription;
     }
 
     // test injection setter/getters
