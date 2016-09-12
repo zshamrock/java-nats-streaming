@@ -219,14 +219,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             setNatsConnection(null);
 
             // Now close ourselves.
-            if (getAckSubscription() != null) {
-                try {
-                    getAckSubscription().unsubscribe();
-                } catch (Exception e) {
-                    logger.warn("stan: error unsubscribing from acks during connection close");
-                    logger.debug("Full stack trace: ", e);
-                }
-            }
+            unsubscribe(getAckSubscription());
+            unsubscribe(hbSubscription);
 
             CloseRequest req = CloseRequest.newBuilder().setClientID(clientId).build();
             logger.trace("CLOSE request: [{}]", req);
@@ -252,6 +246,17 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 nc.close();
             }
             this.unlock();
+        }
+    }
+
+    private static void unsubscribe(io.nats.client.Subscription subscription) {
+        if (subscription != null) {
+            try {
+                subscription.unsubscribe();
+            } catch (Exception e) {
+                logger.warn("stan: error unsubscribing from acks during connection close");
+                logger.debug("Full stack trace: ", e);
+            }
         }
     }
 
