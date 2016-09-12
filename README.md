@@ -27,7 +27,7 @@ Load the following dependency in your project's pom.xml:
     <dependency>
       <groupId>io.nats</groupId>
       <artifactId>java-nats-streaming</artifactId>
-      <version>0.1.0-SNAPSHOT</version>
+      <version>0.2.1-SNAPSHOT</version>
     </dependency>
   </dependencies>
 ```
@@ -46,12 +46,19 @@ Connection sc = cf.createConnection();
 // Simple Synchronous Publisher
 sc.publish("foo", "Hello World".getBytes()); // does not return until an ack has been received from NATS Streaming server
 
+// use latch to await delivery of message before shutting down
+CountDownLatch latch = new CountDownLatch(1); 
+
 // Simple Async Subscriber
 Subscription sub = sc.subscribe("foo", new MessageHandler() {
-    public void onMessage(Message m) {
-        System.out.printf("Received a message: %s\n", m.getData());
-    }
-});
+  public void onMessage(Message m) {
+    latch.countDown();
+    System.out.printf("Received a message: %s\n", new String(m.getData()));
+  }
+}, new SubscriptionOptions.Builder().deliverAllAvailable().build());
+
+// pause until message delivered 
+latch.await();
 
 // Unsubscribe
 sub.unsubscribe();
