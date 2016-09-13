@@ -8,33 +8,53 @@ NATS Streaming is an extremely performant, lightweight reliable streaming platfo
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.nats/java-nats-streaming/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.nats/java-nats-streaming)
 [![Javadoc](http://javadoc.io/badge/io.nats/java-nats-streaming.svg)](http://javadoc.io/doc/io.nats/java-nats-streaming)
 
+[![Dependency Status](https://www.versioneye.com/user/projects/57c07fd1968d6400336022f2/badge.svg?style=flat-square)](https://www.versioneye.com/user/projects/57c07fd1968d6400336022f2)
+[![Reference Status](https://www.versioneye.com/java/io.nats:java-nats-streaming/reference_badge.svg?style=flat-square)](https://www.versioneye.com/java/io.nats:java-nats-streaming/references)
+
 ## Installation
 
-Install the client jar:
+### Maven Central
 
+#### Releases
 
+Current stable release (click for pom info): [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.nats/java-nats-streaming/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.nats/java-nats-streaming)
+
+#### Snapshots
+
+Snapshot releases from the current `master` branch are uploaded to Sonatype OSSRH (OSS Repository Hosting) with each successful Travis CI build. 
+If you don't already have your pom.xml configured for using Maven snapshots, you'll need to add the following repository to your pom.xml:
+
+```xml
+<profiles>
+  <profile>
+     <id>allow-snapshots</id>
+        <activation><activeByDefault>true</activeByDefault></activation>
+     <repositories>
+       <repository>
+         <id>snapshots-repo</id>
+         <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+         <releases><enabled>false</enabled></releases>
+         <snapshots><enabled>true</enabled></snapshots>
+       </repository>
+     </repositories>
+   </profile>
+</profiles>
+
+```
+#### Building from source code (this repository)
+First, download and install the parent POM:
+```
+git clone git@github.com:nats-io/nats-parent-pom.git
+cd nats-parent-pom
+mvn install
+```
+
+Now clone, compile, and install in your local maven repository (or copy the artifacts from the `target/` directory to wherever you need them):
 ```
 git clone git@github.com:/nats-io/java-nats-streaming.git
 
 mvn install
 ```
-
-Load the following dependency in your project's pom.xml:
-
-```
-  <dependencies>
-    ...
-    <dependency>
-      <groupId>io.nats</groupId>
-      <artifactId>java-nats-streaming</artifactId>
-      <version>0.2.1-SNAPSHOT</version>
-    </dependency>
-  </dependencies>
-```
-
-## Documentation
-
-The javadoc can be accessed [here](http://nats-io.github.io/java-nats-streaming/).
 
 ## Basic Usage
 
