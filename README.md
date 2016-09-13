@@ -52,7 +52,7 @@ mvn install
 Now clone, compile, and install in your local maven repository (or copy the artifacts from the `target/` directory to wherever you need them):
 ```
 git clone git@github.com:/nats-io/java-nats-streaming.git
-
+cd java-nats-streaming
 mvn install
 ```
 
