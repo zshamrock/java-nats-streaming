@@ -1,8 +1,13 @@
 Change Log
 ==========
 
+## Version 0.2.1
+_2016-09-12_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.2.0...0.2.1)
+ * [#26](/../../issues/#26) Fixed an issue where the heartbeat subscription was not being unsubscribed during connection close.
+ * Updated README examples and installation info
+
 ## Version 0.2.0
-_2016-09-10_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.1.2...master)
+_2016-09-10_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.1.2...0.2.0)
 
  * Fix `ConnectionFactory::createConnection` to return `Connection` interface vs. `ConnectionImpl`
  * Resolved several test issues, including locating/running server binary for integration tests
