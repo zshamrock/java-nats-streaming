@@ -205,14 +205,13 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         io.nats.client.Connection nc = null;
         this.lock();
         try {
-            if (getNatsConnection() == null) {
+            // Capture for NATS calls below
+            nc = getNatsConnection();
+            if (nc == null) {
                 // We are already closed
                 logger.warn("stan: NATS connection already closed");
                 return;
             }
-
-            // Capture for NATS calls below
-            nc = getNatsConnection();
             // if ncOwned, we close it in finally block
 
             // Signals we are closed.
@@ -257,10 +256,14 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                     throw new IOException(cr.getError());
                 }
             }
-        } finally {
-            if (ncOwned && (nc != null)) {
-                nc.close();
+            if (ncOwned) {
+                try {
+                    nc.close();
+                } catch (Exception ignore) {
+                    logger.warn("NATS connection was null in close()");
+                }
             }
+        } finally {
             this.unlock();
         }
     }
@@ -303,7 +306,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     @Override
     public void publish(String subject, byte[] data) throws IOException {
         final Channel<Exception> ch = createExceptionChannel();
-        publish(subject, null, data, null, ch);
+        publish(subject, data, null, ch);
         if (ch.getCount() != 0) {
             throw new IOException(ch.get());
         }
@@ -315,28 +318,10 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
      */
     @Override
     public String publish(String subject, byte[] data, AckHandler ah) throws IOException {
-        return publish(subject, null, data, ah);
+        return publish(subject, data, ah, null);
     }
 
-    // PublishWithReply will publish to the cluster and wait for an ACK.
-    // void publish(String subject, String reply, byte[] data) throws IOException {
-    // final Channel<Exception> ch = new Channel<Exception>();
-    // publish(subject, reply, data, null, ch);
-    // if (ch.getCount() != 0) {
-    // throw new IOException(ch.get());
-    // }
-    // }
-
-    // PublishAsyncWithReply will publish to the cluster and asynchronously
-    // process the ACK or error state. It will return the GUID for the message being sent.
-    String publish(String subject, String reply, byte[] data, AckHandler ah) throws IOException {
-        return publish(subject, reply, data, ah, null);
-    }
-
-    // PublishAsyncWithReply will publish to the cluster and asynchronously
-    // process the ACK or error state. It will return the GUID for the message
-    // being sent.
-    String publish(String subject, String reply, byte[] data, AckHandler ah, Channel<Exception> ch)
+    String publish(String subject, byte[] data, AckHandler ah, Channel<Exception> ch)
             throws IOException {
         String subj = null;
         String ackSubject = null;
@@ -358,9 +343,6 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             guid = NUID.nextGlobal();
             PubMsg.Builder pb =
                     PubMsg.newBuilder().setClientID(clientId).setGuid(guid).setSubject(subject);
-            if (reply != null) {
-                pb = pb.setReply(reply);
-            }
             if (data != null) {
                 pb = pb.setData(ByteString.copyFrom(data));
             }
@@ -389,7 +371,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
         try {
             nc.publish(subj, ackSubject, bytes);
-            logger.trace("STAN published:\n{}", pe);
+            // logger.trace("STAN published:\n{}", pe);
         } catch (IOException e) {
             removeAck(guid);
             throw (e);
@@ -447,7 +429,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
             // Register subscription.
             subMap.put(sub.inbox, sub);
-            io.nats.client.Connection nc = this.nc;
+            io.nats.client.Connection nc = getNatsConnection();
         } finally {
             this.unlock();
         }
@@ -534,7 +516,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         Exception ex = null;
         try {
             pa = PubAck.parseFrom(msg.getData());
-            logger.trace("Received PubAck:\n{}", pa);
+            // logger.trace("Received PubAck:\n{}", pa);
         } catch (InvalidProtocolBufferException e) {
             logger.error("stan: error unmarshaling PubAck");
             logger.debug("Full stack trace: ", e);
@@ -605,9 +587,9 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         io.nats.client.Connection nc = null;
 
         try {
-            logger.trace("In processMsg, msg = {}", raw);
+            // logger.trace("In processMsg, msg = {}", raw);
             MsgProto msgp = MsgProto.parseFrom(raw.getData());
-            logger.trace("processMsg received MsgProto:\n{}", msgp);
+            // logger.trace("processMsg received MsgProto:\n{}", msgp);
             stanMsg = createStanMessage(msgp);
         } catch (InvalidProtocolBufferException e) {
             logger.error("stan: error unmarshaling msg");
@@ -618,7 +600,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         // Lookup the subscription
         lock();
         try {
-            nc = this.nc;
+            nc = getNatsConnection();
             isClosed = (nc == null);
             sub = (SubscriptionImpl) subMap.get(raw.getSubject());
         } catch (Exception e) {
@@ -658,13 +640,14 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
 
         // Process auto-ack
-        if (!isManualAck && nc != null && !nc.isClosed()) {
+        if (!isManualAck) {
             Ack ack = Ack.newBuilder().setSubject(stanMsg.getSubject())
                     .setSequence(stanMsg.getSequence()).build();
             try {
-                logger.trace("processMsg publishing Ack for sequence: {}", stanMsg.getSequence());
+                // logger.trace("processMsg publishing Ack for sequence: {}",
+                // stanMsg.getSequence());
                 nc.publish(ackSubject, ack.toByteArray());
-                logger.trace("processMsg published Ack:\n{}", ack);
+                // logger.trace("processMsg published Ack:\n{}", ack);
             } catch (IOException e) {
                 // FIXME(dlc) - Async error handler? Retry?
                 // This really won't happen since the publish is executing in the NATS thread.

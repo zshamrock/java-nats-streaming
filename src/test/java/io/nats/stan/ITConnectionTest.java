@@ -438,25 +438,22 @@ public class ITConnectionTest {
     // }
 
     @Test
-    public void testAsyncPubSubWithReply() {
+    public void testAsyncPubSub() {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (ConnectionImpl sc = (ConnectionImpl) cf.createConnection()) {
                 final Channel<Boolean> ch = new Channel<Boolean>();
                 final byte[] hw = "Hello World".getBytes();
 
-                final String inbox = sc.newInbox();
-
                 try (Subscription sub = sc.subscribe("foo", new MessageHandler() {
                     public void onMessage(Message msg) {
                         assertEquals("foo", msg.getSubject());
                         assertArrayEquals(hw, msg.getData());
-                        assertEquals(inbox, msg.getReplyTo());
                         ch.add(true);
                     }
                 })) {
                     try {
-                        sc.publish("foo", inbox, hw, null);
+                        sc.publish("foo", hw, null);
                     } catch (IOException e) {
                         e.printStackTrace();
                         fail("Received error on publish: " + e.getMessage());
@@ -941,43 +938,43 @@ public class ITConnectionTest {
         }
     }
 
-    @Test
-    public void testSubscribeShrink() {
-        try (STANServer s = runServer(clusterName, false)) {
-            ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
-            try (final Connection sc = cf.createConnection()) {
-                int nsubs = 1000;
-                List<Subscription> subs = new CopyOnWriteArrayList<Subscription>();
-                for (int i = 0; i < nsubs; i++) {
-                    // Create a valid one
-                    Subscription sub = null;
-                    try {
-                        sub = sc.subscribe("foo", null);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        fail(e.getMessage());
-                    }
-                    subs.add(sub);
-                }
-
-                assertEquals(nsubs, subs.size());
-
-                // Now unsubscribe them all
-                Iterator<Subscription> it = subs.iterator();
-                while (it.hasNext()) {
-                    try {
-                        it.next().unsubscribe();;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        fail(e.getMessage());
-                    }
-                }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
-            }
-        }
-    }
+    // @Test
+    // public void testSubscribeShrink() {
+    // try (STANServer s = runServer(clusterName, false)) {
+    // ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
+    // try (final Connection sc = cf.createConnection()) {
+    // int nsubs = 1000;
+    // List<Subscription> subs = new CopyOnWriteArrayList<Subscription>();
+    // for (int i = 0; i < nsubs; i++) {
+    // // Create a valid one
+    // Subscription sub = null;
+    // try {
+    // sub = sc.subscribe("foo", null);
+    // } catch (Exception e) {
+    // e.printStackTrace();
+    // fail(e.getMessage());
+    // }
+    // subs.add(sub);
+    // }
+    //
+    // assertEquals(nsubs, subs.size());
+    //
+    // // Now unsubscribe them all
+    // Iterator<Subscription> it = subs.iterator();
+    // while (it.hasNext()) {
+    // try {
+    // it.next().unsubscribe();
+    // } catch (Exception e) {
+    // e.printStackTrace();
+    // fail(e.getMessage());
+    // }
+    // }
+    // } catch (IOException | TimeoutException e) {
+    // e.printStackTrace();
+    // fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
+    // }
+    // }
+    // }
 
     @Test
     public void testDupClientId() {
@@ -1433,9 +1430,14 @@ public class ITConnectionTest {
         }
     }
 
+    /*
+     * This test tends to crash gnatsd when tracing is enabled (-DV, which is enabled by passing
+     * `true` as the second argument of runServer) and toSend is 500 or greater.
+     * 
+     */
     @Test
-    public void testPubMultiQueueSubWithSlowSubscriber() {
-        try (STANServer s = runServer(clusterName, false)) {
+    public void testPubMultiQueueSubWithSlowSubscriberAndFlapping() {
+        try (STANServer s = runServer(clusterName, true)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final Subscription[] subs = new Subscription[2];
@@ -1460,6 +1462,86 @@ public class ITConnectionTest {
                             // logger.error("Sub1[{}]: {}\n", s1Received.get(), msg);
                         } else if (msg.getSubscription().equals(subs[1])) {
                             // Slow down this subscriber
+                            sleep(50, TimeUnit.MILLISECONDS);
+                            s2Received.incrementAndGet();
+                            // logger.error("Sub2[{}]: {}\n", s2Received.get(), msg);
+                        } else {
+                            fail("Received message on unknown subscription");
+                        }
+                        // Track total
+                        int nr = received.incrementAndGet();
+                        if (nr == toSend) {
+                            ch.add(true);
+                        }
+                    }
+                };
+
+                try (Subscription s1 = sc.subscribe("foo", "bar", mcb)) {
+                    try (Subscription s2 = sc.subscribe("foo", "bar", mcb)) {
+                        subs[0] = s1;
+                        subs[1] = s2;
+                        // Publish out the messages.
+                        for (int i = 0; i < toSend; i++) {
+                            byte[] data = String.format("%d", i).getBytes();
+                            sc.publish("foo", data);
+                            sleep(1, TimeUnit.MICROSECONDS);
+                        }
+
+                        assertTrue("Did not receive all our messages",
+                                waitTime(ch, 10, TimeUnit.SECONDS));
+                        assertEquals("Did not receive correct number of messages", toSend,
+                                received.get());
+
+                        // Since we slowed down sub2, sub1 should get the
+                        // majority of messages.
+                        int minCountForS1 = (toSend / 2) + 2;
+                        assertTrue(
+                                String.format("Expected s1 to get at least %d msgs, was %d\n",
+                                        minCountForS1, s1Received.get()),
+                                s1Received.get() > minCountForS1);
+
+                        if (s1Received.get() != (toSend - s2Received.get())) {
+                            fail(String.format("Expected %d for sub1, got %d",
+                                    (toSend - s2Received.get()), s1Received.get()));
+                        }
+                    }
+                }
+            } catch (IOException | TimeoutException e) {
+                e.printStackTrace();
+                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
+            }
+        }
+    }
+
+    @Test
+    public void testPubMultiQueueSubWithSlowSubscriber() {
+        try (STANServer s = runServer(clusterName, false)) {
+            ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
+            try (Connection sc = cf.createConnection()) {
+                final Subscription[] subs = new Subscription[2];
+                final Channel<Boolean> ch = new Channel<Boolean>();
+                final Channel<Boolean> s2BlockedCh = new Channel<Boolean>();
+                final AtomicInteger received = new AtomicInteger(0);
+                final AtomicInteger s1Received = new AtomicInteger(0);
+                final AtomicInteger s2Received = new AtomicInteger(0);
+                final int toSend = 500;
+                final Map<Long, Object> msgMap = new ConcurrentHashMap<Long, Object>();
+                final Object msgMapLock = new Object();
+                MessageHandler mcb = new MessageHandler() {
+                    public void onMessage(Message msg) {
+                        // Remember the message sequence.
+                        synchronized (msgMapLock) {
+                            assertFalse("Detected duplicate for sequence: " + msg.getSequence(),
+                                    msgMap.containsKey(msg.getSequence()));
+                            msgMap.put(msg.getSequence(), new Object());
+                        }
+                        // Track received for each receiver
+                        if (msg.getSubscription().equals(subs[0])) {
+                            s1Received.incrementAndGet();
+                            // logger.error("Sub1[{}]: {}\n", s1Received.get(), msg);
+                        } else if (msg.getSubscription().equals(subs[1])) {
+                            // Block this subscriber
+                            s2BlockedCh.get();
                             sleep(50, TimeUnit.MILLISECONDS);
                             s2Received.incrementAndGet();
                             // logger.error("Sub2[{}]: {}\n", s2Received.get(), msg);
@@ -1655,6 +1737,7 @@ public class ITConnectionTest {
                 fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
+        System.err.println("Stan server is shut down");
     }
 
     @Test
