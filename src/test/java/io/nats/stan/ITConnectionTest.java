@@ -941,43 +941,43 @@ public class ITConnectionTest {
         }
     }
 
-    // @Test
-    // public void testSubscribeShrink() {
-    // try (STANServer s = runServer(clusterName, false)) {
-    // ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
-    // try (final Connection sc = cf.createConnection()) {
-    // int nsubs = 1000;
-    // List<Subscription> subs = new CopyOnWriteArrayList<Subscription>();
-    // for (int i = 0; i < nsubs; i++) {
-    // // Create a valid one
-    // Subscription sub = null;
-    // try {
-    // sub = sc.subscribe("foo", null);
-    // } catch (Exception e) {
-    // e.printStackTrace();
-    // fail(e.getMessage());
-    // }
-    // subs.add(sub);
-    // }
-    //
-    // assertEquals(nsubs, subs.size());
-    //
-    // // Now unsubscribe them all
-    // Iterator<Subscription> it = subs.iterator();
-    // while (it.hasNext()) {
-    // try {
-    // it.next().unsubscribe();
-    // } catch (Exception e) {
-    // e.printStackTrace();
-    // fail(e.getMessage());
-    // }
-    // }
-    // } catch (IOException | TimeoutException e) {
-    // e.printStackTrace();
-    // fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
-    // }
-    // }
-    // }
+    @Test
+    public void testSubscribeShrink() {
+        try (STANServer s = runServer(clusterName, false)) {
+            ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
+            try (final Connection sc = cf.createConnection()) {
+                int nsubs = 1000;
+                List<Subscription> subs = new CopyOnWriteArrayList<Subscription>();
+                for (int i = 0; i < nsubs; i++) {
+                    // Create a valid one
+                    Subscription sub = null;
+                    try {
+                        sub = sc.subscribe("foo", null);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        fail(e.getMessage());
+                    }
+                    subs.add(sub);
+                }
+
+                assertEquals(nsubs, subs.size());
+
+                // Now unsubscribe them all
+                Iterator<Subscription> it = subs.iterator();
+                while (it.hasNext()) {
+                    try {
+                        it.next().unsubscribe();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        fail(e.getMessage());
+                    }
+                }
+            } catch (IOException | TimeoutException e) {
+                e.printStackTrace();
+                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
+            }
+        }
+    }
 
     @Test
     public void testDupClientId() {
