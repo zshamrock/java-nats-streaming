@@ -105,6 +105,15 @@ public interface Connection extends AutoCloseable {
             SubscriptionOptions opts) throws IOException, TimeoutException;
 
     /**
+     * Returns the underlying NATS connection. Use with caution, especially if you didn't create the
+     * connection.
+     * 
+     * @return the underlying NATS connection.
+     * @see io.nats.client.Connection
+     */
+    io.nats.client.Connection getNatsConnection();
+
+    /**
      * Closes the connection.
      * 
      * @throws IOException if an error occurs

@@ -112,7 +112,13 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         this.clusterId = stanClusterId;
         this.clientId = clientId;
         this.opts = opts;
-        setNatsConnection(opts.getNatsConn());
+
+        // Check if the user has provided a connection as an option
+        if (this.opts != null) {
+            if (this.opts.getNatsConn() != null) {
+                setNatsConnection(this.opts.getNatsConn());
+            }
+        }
     }
 
     // Connect will form a connection to the STAN subsystem.
@@ -661,7 +667,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         return this.clientId;
     }
 
-    protected io.nats.client.Connection getNatsConnection() {
+    @Override
+    public io.nats.client.Connection getNatsConnection() {
         return this.nc;
     }
 

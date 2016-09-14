@@ -491,6 +491,7 @@ public class ITConnectionTest {
                 MessageHandler mcb = new MessageHandler() {
                     public void onMessage(Message msg) {
                         received.incrementAndGet();
+                        assertEquals("Wrong message sequence received", toSend, msg.getSequence());
                         savedMsgs.add(msg);
                         logger.debug("msg={}", msg);
                         ch.add(true);
@@ -502,7 +503,9 @@ public class ITConnectionTest {
 
                 try (SubscriptionImpl sub = (SubscriptionImpl) sc.subscribe("foo", mcb, opts)) {
                     // Check for sub setup
-                    assertEquals(sub.opts.getStartAt(), StartPosition.LastReceived);
+                    assertEquals(
+                            String.format("Incorrect StartAt state: %s\n", sub.opts.getStartAt()),
+                            sub.opts.getStartAt(), StartPosition.LastReceived);
 
                     // Make sure we got our message
                     assertTrue("Did not receive our message", waitTime(ch, 5, TimeUnit.SECONDS));
@@ -1437,7 +1440,7 @@ public class ITConnectionTest {
      */
     @Test
     public void testPubMultiQueueSubWithSlowSubscriberAndFlapping() {
-        try (STANServer s = runServer(clusterName, true)) {
+        try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final Subscription[] subs = new Subscription[2];
@@ -1524,7 +1527,7 @@ public class ITConnectionTest {
                 final AtomicInteger received = new AtomicInteger(0);
                 final AtomicInteger s1Received = new AtomicInteger(0);
                 final AtomicInteger s2Received = new AtomicInteger(0);
-                final int toSend = 500;
+                final int toSend = 100;
                 final Map<Long, Object> msgMap = new ConcurrentHashMap<Long, Object>();
                 final Object msgMapLock = new Object();
                 MessageHandler mcb = new MessageHandler() {
@@ -1541,8 +1544,8 @@ public class ITConnectionTest {
                             // logger.error("Sub1[{}]: {}\n", s1Received.get(), msg);
                         } else if (msg.getSubscription().equals(subs[1])) {
                             // Block this subscriber
-                            s2BlockedCh.get();
-                            sleep(50, TimeUnit.MILLISECONDS);
+                            while (!s2BlockedCh.isClosed()) {
+                            }
                             s2Received.incrementAndGet();
                             // logger.error("Sub2[{}]: {}\n", s2Received.get(), msg);
                         } else {
@@ -1564,8 +1567,9 @@ public class ITConnectionTest {
                         for (int i = 0; i < toSend; i++) {
                             byte[] data = String.format("%d", i).getBytes();
                             sc.publish("foo", data);
-                            sleep(1, TimeUnit.MICROSECONDS);
+                            // sleep(1, TimeUnit.MICROSECONDS);
                         }
+                        s2BlockedCh.close();
 
                         assertTrue("Did not receive all our messages",
                                 waitTime(ch, 10, TimeUnit.SECONDS));
@@ -1574,16 +1578,15 @@ public class ITConnectionTest {
 
                         // Since we slowed down sub2, sub1 should get the
                         // majority of messages.
-                        int minCountForS1 = (toSend / 2) + 2;
-                        assertTrue(
-                                String.format("Expected s1 to get at least %d msgs, was %d\n",
-                                        minCountForS1, s1Received.get()),
-                                s1Received.get() > minCountForS1);
+                        int s1r = s1Received.get();
+                        int s2r = s2Received.get();
 
-                        if (s1Received.get() != (toSend - s2Received.get())) {
-                            fail(String.format("Expected %d for sub1, got %d",
-                                    (toSend - s2Received.get()), s1Received.get()));
-                        }
+                        assertFalse(String.format(
+                                "Expected sub2 to receive no more than half, but got %d msgs\n",
+                                s2r), s2r > toSend / 2);
+                        assertTrue(String.format("Expected %d msgs for sub1, got %d",
+                                (toSend - s2r), s1r), s1r == toSend - s2r);
+
                     }
                 }
             } catch (IOException | TimeoutException e) {

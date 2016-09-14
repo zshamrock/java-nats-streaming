@@ -256,6 +256,31 @@ public class ConnectionImplTest {
     }
 
     @Test
+    public void testGetNatsConnection() throws IOException, TimeoutException {
+
+        io.nats.client.Connection nc = mock(io.nats.client.Connection.class);
+
+        // Make sure the NATS connection is the one that was passed in
+        Options opts = new Options.Builder().setNatsConn(nc).create();
+        Connection sc = new ConnectionImpl("foo", "bar", opts);
+        assertEquals(nc, sc.getNatsConnection());
+
+        // Make sure the NATS connection is null (since it won't have been created yet)
+        sc = new ConnectionImpl("foo", "bar");
+        assertNull(sc.getNatsConnection());
+
+        // Make sure the NATS connection is created, and returned, when the connection is created
+        // internally.
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
+            assertNotNull(conn.nc);
+            assertEquals(conn.nc, conn.getNatsConnection());
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+    }
+
+    @Test
     public void testGetterSetters() {
         try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             // Channel<PubAck> mockChan = mock(Channel.class);
