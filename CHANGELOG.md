@@ -1,6 +1,11 @@
 Change Log
 ==========
 
+## Version 0.3.0
+_2016-09-14_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.2.1...0.3.0)
+ * [#29] Added `getNatsConnection()` public API for getting underlying NATS connection.
+ * Removed the `publish*WithReply` variants, as request-reply isn't well-served by streaming. Use the underlying NATS connection to do this.
+
 ## Version 0.2.1
 _2016-09-12_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.2.0...0.2.1)
  * [#26](/../../issues/#26) Fixed an issue where the heartbeat subscription was not being unsubscribed during connection close.
