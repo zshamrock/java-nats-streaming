@@ -298,10 +298,11 @@ public class StanBench {
         phaser.arriveAndAwaitAdvance();
 
         // Now publishers
+        List<Integer> pubCounts = io.nats.benchmark.Utils.msgsPerClient(numMsgs, numPubs);
         for (int i = 0; i < numPubs; i++) {
             phaser.register();
             String subId = String.format("%s-pub-%d", clientId, i);
-            exec.execute(new PubWorker(phaser, numMsgs, size, ignoreOld, subId));
+            exec.execute(new PubWorker(phaser, pubCounts.get(i), size, ignoreOld, subId));
         }
 
         System.out.printf("Starting benchmark [msgs=%d, msgsize=%d, pubs=%d, subs=%d]\n", numMsgs,
