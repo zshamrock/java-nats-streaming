@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -72,6 +73,10 @@ public class ITConnectionTest {
 
     @After
     public void tearDown() throws Exception {}
+
+    public Connection newDefaultConnection() throws IOException, TimeoutException {
+        return new ConnectionFactory(clusterName, clientName).createConnection();
+    }
 
     @Test
     public void testNoNats() {
@@ -235,35 +240,114 @@ public class ITConnectionTest {
     }
 
     @Test
-    public void testBasicQueueSubscription() {
+    public void testBasicQueueSubscription()
+            throws IOException, TimeoutException, InterruptedException {
         // Run a STAN server
-        try (STANServer s = runServer(clusterName, false)) {
+        try (STANServer s = runServer(clusterName)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
-                try (Subscription sub = sc.subscribe("foo", "bar", new MessageHandler() {
-                    public void onMessage(Message msg) {}
-                })) {
-                    // do nothing
-                }
-                boolean exThrown = false;
-                // Test that we cannot set durable status on queue subscribers.
-                SubscriptionOptions sopts = new SubscriptionOptions.Builder()
-                        .setDurableName("durable-queue-sub").build();
-                try (Subscription sub = sc.subscribe("foo", "bar", new MessageHandler() {
-                    public void onMessage(Message msg) {}
-                }, sopts)) {
-                    // do nothing
-                } catch (Exception e) {
-                    assertEquals(ConnectionImpl.SERVER_ERR_DURABLE_QUEUE, e.getMessage());
-                    exThrown = true;
-                }
-                assertTrue("Expected exception to be thrown on queue subscribe with durable name",
-                        exThrown);
+                final AtomicInteger count = new AtomicInteger();
+                final CountDownLatch latch = new CountDownLatch(1);
+                MessageHandler cb = new MessageHandler() {
+                    public void onMessage(Message msg) {
+                        if (msg.getSequence() == 1) {
+                            if (count.incrementAndGet() == 2) {
+                                latch.countDown();
+                            }
+                        }
+                    }
+                };
 
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Should have connected successfully, but got: " + e.getMessage());
+                try (Subscription sub = sc.subscribe("foo", "bar", cb)) {
+                    // Test that durable and non durable queue subscribers with
+                    // same name can coexist and they both receive the same message.
+                    SubscriptionOptions sopts = new SubscriptionOptions.Builder()
+                            .setDurableName("durable-queue-sub").build();
+                    try (Subscription sub2 = sc.subscribe("foo", "bar", cb, sopts)) {
+
+                        // Publish a message
+                        sc.publish("foo", "msg".getBytes());
+
+                        // Wait for both copies of the message to be received.
+                        assertTrue("Did not get our message", latch.await(5, TimeUnit.SECONDS));
+
+                    } catch (Exception e) {
+                        fail("Unexpected error on queue subscribe with durable name");
+                    }
+
+                    // Check that one cannot use ':' for the queue durable name.
+                    sopts = new SubscriptionOptions.Builder().setDurableName("my:dur").build();
+                    boolean exThrown = false;
+                    try (Subscription sube = sc.subscribe("foo", "bar", cb, sopts)) {
+                        // do nothing?
+                    } catch (IOException e) {
+                        assertEquals(ConnectionImpl.SERVER_ERR_INVALID_DURABLE_NAME,
+                                e.getMessage());
+                        exThrown = true;
+                    } finally {
+                        assertTrue("Expected to get an error regarding durable name", exThrown);
+                    }
+
+                }
+
             }
+        }
+    }
+
+    @Test
+    public void testDurableQueueSubscriber()
+            throws IOException, TimeoutException, InterruptedException {
+        final long total = 5;
+        final long firstBatch = total;
+        final long secondBatch = 2 * total;
+        try (STANServer s = runServer(clusterName)) {
+            try (Connection sc = newDefaultConnection()) {
+                for (int i = 0; i < total; i++) {
+                    sc.publish("foo", "msg".getBytes());
+                }
+                final CountDownLatch latch = new CountDownLatch(1);
+                MessageHandler cb = new MessageHandler() {
+                    public void onMessage(Message msg) {
+                        if (!msg.isRedelivered() && (msg.getSequence() == firstBatch
+                                || msg.getSequence() == secondBatch)) {
+                            latch.countDown();
+                        }
+                    }
+                };
+                sc.subscribe("foo", "bar", cb, new SubscriptionOptions.Builder()
+                        .deliverAllAvailable().setDurableName("durable-queue-sub").build());
+
+                assertTrue("Did not get our message", latch.await(5, TimeUnit.SECONDS));
+                // Give a chance to ACKs to make it to the server.
+                // This step is not necessary. Worst could happen is that messages
+                // are redelivered. This is why we check on !msg.getRedelivered() in the
+                // callback to validate the counts.
+                sleep(500, TimeUnit.MILLISECONDS);
+            }
+
+            // Create new connection
+            try (Connection sc = newDefaultConnection()) {
+                final CountDownLatch latch = new CountDownLatch(1);
+                MessageHandler cb = new MessageHandler() {
+                    public void onMessage(Message msg) {
+                        if (!msg.isRedelivered() && (msg.getSequence() == firstBatch
+                                || msg.getSequence() == secondBatch)) {
+                            latch.countDown();
+                        }
+                    }
+                };
+                for (int i = 0; i < total; i++) {
+                    sc.publish("foo", "msg".getBytes());
+                }
+                // Create durable queue sub, it should receive from where it left off,
+                // and ignore the start position
+                try (Subscription sub = sc.subscribe("foo", "bar", cb,
+                        new SubscriptionOptions.Builder().startAtSequence(10 * total)
+                                .setDurableName("durable-queue-sub").build())) {
+                    assertTrue(latch.await(5, TimeUnit.SECONDS));
+                }
+            }
+
         }
     }
 
@@ -1788,11 +1872,9 @@ public class ITConnectionTest {
 
                 // Now subscribe and set start position to #6, so should
                 // received 6-10.
-                try (Subscription sub =
-                        sc.subscribe("foo", mcb,
-                                new SubscriptionOptions.Builder().deliverAllAvailable()
-                                        .setAckWait(1, TimeUnit.SECONDS).setManualAcks(true)
-                                        .build())) {
+                try (Subscription sub = sc.subscribe("foo", mcb,
+                        new SubscriptionOptions.Builder().deliverAllAvailable()
+                                .setAckWait(1, TimeUnit.SECONDS).setManualAcks(true).build())) {
                     assertTrue("Did not receive at least 10 messages",
                             waitTime(ch, 5, TimeUnit.SECONDS));
 

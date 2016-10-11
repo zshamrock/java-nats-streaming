@@ -49,15 +49,15 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     static final int DEFAULT_MAX_PUB_ACKS_IN_FLIGHT = 2 ^ 14; // 16384
 
     static final String PFX = "stan: ";
-    static final String ERR_CONNECTION_REQ_TIMEOUT = PFX + "connect request timeout";
+    static final String ERR_BAD_ACK = PFX + "malformed ack";
+    static final String ERR_BAD_CONNECTION = PFX + "invalid connection";
+    static final String ERR_BAD_SUBSCRIPTION = PFX + "invalid subscription";
     static final String ERR_CLOSE_REQ_TIMEOUT = PFX + "close request timeout";
     static final String ERR_CONNECTION_CLOSED = PFX + "connection closed";
-    static final String ERR_TIMEOUT = PFX + "publish ack timeout";
-    static final String ERR_BAD_ACK = PFX + "malformed ack";
-    static final String ERR_BAD_SUBSCRIPTION = PFX + "invalid subscription";
-    static final String ERR_BAD_CONNECTION = PFX + "invalid connection";
+    static final String ERR_CONNECTION_REQ_TIMEOUT = PFX + "connect request timeout";
     static final String ERR_MANUAL_ACK = PFX + "cannot manually ack in auto-ack mode";
     static final String ERR_NULL_MSG = PFX + "null message";
+    static final String ERR_TIMEOUT = PFX + "publish ack timeout";
 
     // Server errors
     static final String SERVER_ERR_BAD_PUB_MSG = "stan: malformed publish message envelope";
@@ -72,6 +72,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     static final String SERVER_ERR_INVALID_ACK_WAIT =
             "stan: invalid ack wait time, should be >= 1s";
     static final String SERVER_ERR_DUP_DURABLE = "stan: duplicate durable registration";
+    static final String SERVER_ERR_INVALID_DURABLE_NAME =
+            "stan: durable name of a durable queue subscriber can't contain the character ':'";
     static final String SERVER_ERR_DURABLE_QUEUE = "stan: queue subscribers can't be durable";
 
     static final Logger logger = LoggerFactory.getLogger(ConnectionImpl.class);
