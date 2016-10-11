@@ -524,8 +524,7 @@ public class ITConnectionTest {
     @Test
     public void testAsyncPubSub() {
         try (STANServer s = runServer(clusterName, false)) {
-            ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
-            try (ConnectionImpl sc = (ConnectionImpl) cf.createConnection()) {
+            try (ConnectionImpl sc = (ConnectionImpl) newDefaultConnection()) {
                 final Channel<Boolean> ch = new Channel<Boolean>();
                 final byte[] hw = "Hello World".getBytes();
 
