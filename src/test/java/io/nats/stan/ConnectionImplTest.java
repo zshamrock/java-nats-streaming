@@ -539,24 +539,6 @@ public class ConnectionImplTest {
     }
 
     @Test
-    public void testPublishAsyncChannelPutInterrupted() {
-        try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
-            // Simulate PubAckChan interruption
-            conn.setPubAckChan(pac);
-            doThrow(new InterruptedException()).when(pac).put(eq(PubAck.getDefaultInstance()));
-
-            conn.publish("foo", null, null);
-
-            // Now verify our logging interactions
-            verifier.verifyLogMsgEquals(Level.WARN,
-                    "stan: interrupted while writing to publish ack channel");
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail(e.getMessage());
-        }
-    }
-
-    @Test
     public void testPublishAsyncNatsPublishFailure() throws IOException, TimeoutException {
         thrown.expect(IOException.class);
         thrown.expectMessage("Test exception");

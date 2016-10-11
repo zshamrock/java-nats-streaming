@@ -366,14 +366,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
 
         // Use the buffered channel to control the number of outstanding acks.
-        try {
-            pac.put(PubAck.getDefaultInstance());
-        } catch (InterruptedException e1) {
-            logger.warn("stan: interrupted while writing to publish ack channel");
-        }
-        // if (!success) {
-        // logger.error("Failed to add ack token to buffered channel, count={}", pac.getCount());
-        // }
+        pac.add(PubAck.getDefaultInstance());
 
         try {
             nc.publish(subj, ackSubject, bytes);
