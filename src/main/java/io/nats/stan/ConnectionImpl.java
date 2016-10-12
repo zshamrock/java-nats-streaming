@@ -6,7 +6,6 @@
 
 package io.nats.stan;
 
-import io.nats.client.Channel;
 import io.nats.client.Message;
 import io.nats.client.MessageHandler;
 import io.nats.client.NUID;
@@ -35,6 +34,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
@@ -94,7 +95,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     Map<String, Subscription> subMap;
     Map<String, AckClosure> pubAckMap;
-    Channel<PubAck> pubAckChan;
+    BlockingQueue<PubAck> pubAckChan;
     Options opts;
     io.nats.client.Connection nc;
 
@@ -186,7 +187,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         // Create Subscription map
         subMap = new HashMap<String, Subscription>();
 
-        pubAckChan = new Channel<PubAck>(opts.getMaxPubAcksInFlight());
+        pubAckChan = new LinkedBlockingQueue<PubAck>(opts.getMaxPubAcksInFlight());
     }
 
     io.nats.client.ConnectionFactory createNatsConnectionFactory() {
@@ -276,7 +277,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
     }
 
-    protected AckClosure createAckClosure(AckHandler ah, Channel<Exception> ch) {
+    protected AckClosure createAckClosure(AckHandler ah, BlockingQueue<Exception> ch) {
         return new AckClosure(ah, ch);
     }
 
@@ -306,17 +307,17 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
     }
 
-    Channel<Exception> createExceptionChannel() {
-        return new Channel<Exception>();
+    BlockingQueue<Exception> createExceptionChannel() {
+        return new LinkedBlockingQueue<Exception>();
     }
 
     // Publish will publish to the cluster and wait for an ACK.
     @Override
     public void publish(String subject, byte[] data) throws IOException {
-        final Channel<Exception> ch = createExceptionChannel();
+        final BlockingQueue<Exception> ch = createExceptionChannel();
         publish(subject, data, null, ch);
-        if (ch.getCount() != 0) {
-            throw new IOException(ch.get());
+        if (ch.size() != 0) {
+            throw new IOException(ch.poll());
         }
     }
 
@@ -329,12 +330,12 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         return publish(subject, data, ah, null);
     }
 
-    String publish(String subject, byte[] data, AckHandler ah, Channel<Exception> ch)
+    String publish(String subject, byte[] data, AckHandler ah, BlockingQueue<Exception> ch)
             throws IOException {
         String subj = null;
         String ackSubject = null;
         Duration ackTimeout;
-        Channel<PubAck> pac;
+        BlockingQueue<PubAck> pac;
         final AckClosure a;
         final PubMsg pe;
         String guid;
@@ -368,11 +369,14 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
 
         // Use the buffered channel to control the number of outstanding acks.
-        pac.add(PubAck.getDefaultInstance());
+        try {
+            pac.put(PubAck.getDefaultInstance());
+        } catch (InterruptedException e) {
+            logger.warn("Publish operation interrupted", e);
+        }
 
         try {
             nc.publish(subj, ackSubject, bytes);
-            // logger.trace("STAN published:\n{}", pe);
         } catch (IOException e) {
             removeAck(guid);
             throw (e);
@@ -547,7 +551,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     protected AckClosure removeAck(String guid) {
         AckClosure ackClosure = null;
-        Channel<PubAck> pac = null;
+        BlockingQueue<PubAck> pac = null;
         this.lock();
         try {
             ackClosure = (AckClosure) pubAckMap.get(guid);
@@ -564,8 +568,12 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
 
         // Remove from channel to unblock async publish
-        if (ackClosure != null && pac.getCount() > 0) {
-            pac.get();
+        if (ackClosure != null && pac.size() > 0) {
+            try {
+                pac.take();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         return ackClosure;
@@ -692,11 +700,11 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     }
 
     // test injection setter/getters
-    void setPubAckChan(Channel<PubAck> ch) {
+    void setPubAckChan(BlockingQueue<PubAck> ch) {
         this.pubAckChan = ch;
     }
 
-    Channel<PubAck> getPubAckChan() {
+    BlockingQueue<PubAck> getPubAckChan() {
         return pubAckChan;
     }
 
@@ -719,9 +727,9 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     class AckClosure {
         protected TimerTask ackTask;
         AckHandler ah;
-        Channel<Exception> ch;
+        BlockingQueue<Exception> ch;
 
-        AckClosure(final AckHandler ah, final Channel<Exception> ch) {
+        AckClosure(final AckHandler ah, final BlockingQueue<Exception> ch) {
             this.ah = ah;
             this.ch = ch;
         }
