@@ -399,4 +399,10 @@ class UnitTestUtilities {
         }
         return srv;
     }
+
+    static synchronized void setLogLevel(ch.qos.logback.classic.Level level) {
+        ch.qos.logback.classic.Logger lbLog =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("io.nats.stan");
+        lbLog.setLevel(level);
+    }
 }

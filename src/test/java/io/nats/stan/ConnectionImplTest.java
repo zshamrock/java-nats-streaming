@@ -6,9 +6,10 @@
 
 package io.nats.stan;
 
+import static io.nats.stan.UnitTestUtilities.await;
 import static io.nats.stan.UnitTestUtilities.newMockedConnection;
+import static io.nats.stan.UnitTestUtilities.setLogLevel;
 import static io.nats.stan.UnitTestUtilities.setupMockNatsConnection;
-import static io.nats.stan.UnitTestUtilities.sleep;
 import static io.nats.stan.UnitTestUtilities.testClientName;
 import static io.nats.stan.UnitTestUtilities.testClusterName;
 import static org.junit.Assert.assertEquals;
@@ -18,11 +19,13 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.matches;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,9 +64,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.TimerTask;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -83,13 +88,13 @@ public class ConnectionImplTest {
     public TestCasePrinterRule pr = new TestCasePrinterRule(System.out);
 
     @Mock
-    private BlockingQueue<PubAck> pac;
+    private BlockingQueue<PubAck> pubAckChanMock;
 
     @Mock
-    Map<String, AckClosure> pubAckMap;
+    HashMap<String, AckClosure> pubAckMapMock;
 
     @Mock
-    Map<String, Subscription> subMap;
+    Map<String, Subscription> subMapMock;
 
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {}
@@ -108,6 +113,7 @@ public class ConnectionImplTest {
     @After
     public void tearDown() throws Exception {
         verifier.teardown();
+        setLogLevel(Level.INFO);
     }
 
     @SuppressWarnings("resource")
@@ -128,6 +134,14 @@ public class ConnectionImplTest {
         ConnectionImpl conn = new ConnectionImpl(testClusterName, testClientName, opts);
         assertNotNull(conn);
         assertEquals(555, conn.opts.getAckTimeout().getSeconds());
+    }
+
+    @Test
+    public void testConnectionImplOptionsNull() {
+        ConnectionImpl conn = new ConnectionImpl(testClusterName, testClientName, null);
+        assertNotNull(conn);
+        assertEquals(Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT),
+                conn.opts.getAckTimeout());
     }
 
     @Test
@@ -257,6 +271,34 @@ public class ConnectionImplTest {
     }
 
     @Test
+    public void testCreateSubscriptionRequest() throws IOException, TimeoutException {
+        try (ConnectionImpl conn = (ConnectionImpl) spy(newMockedConnection())) {
+            // BlockingQueue<PubAck> mockChan = mock(BlockingQueue.class);
+            conn.setPubAckChan(pubAckChanMock);
+            assertEquals(conn.getPubAckChan(), pubAckChanMock);
+
+            @SuppressWarnings("unchecked")
+            Map<String, AckClosure> mockMap = (Map<String, AckClosure>) mock(Map.class);
+            conn.setPubAckMap(mockMap);
+            assertEquals(mockMap, conn.getPubAckMap());
+
+            SubscriptionImpl sub = mock(SubscriptionImpl.class);
+            when(sub.getConnection()).thenReturn(conn);
+            when(sub.getSubject()).thenReturn("foo");
+            when(sub.getQueue()).thenReturn("bar");
+            when(sub.getInbox()).thenReturn("_INBOX.fake");
+
+            SubscriptionOptions subOpts = mock(SubscriptionOptions.class);
+            when(sub.getOptions()).thenReturn(subOpts);
+            // assertEquals(subOpts, sub.getOptions());
+            when(subOpts.getStartAt()).thenReturn(StartPosition.NewOnly);
+            when(subOpts.getMaxInFlight()).thenReturn(100);
+            when(subOpts.getAckWait()).thenReturn(Duration.ofSeconds(20));
+            conn.createSubscriptionRequest(sub);
+        }
+    }
+
+    @Test
     public void testGetNatsConnection() throws IOException, TimeoutException {
 
         io.nats.client.Connection nc = mock(io.nats.client.Connection.class);
@@ -285,8 +327,8 @@ public class ConnectionImplTest {
     public void testGetterSetters() {
         try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             // BlockingQueue<PubAck> mockChan = mock(BlockingQueue.class);
-            conn.setPubAckChan(pac);
-            assertEquals(conn.getPubAckChan(), pac);
+            conn.setPubAckChan(pubAckChanMock);
+            assertEquals(conn.getPubAckChan(), pubAckChanMock);
 
             @SuppressWarnings("unchecked")
             Map<String, AckClosure> mockMap = (Map<String, AckClosure>) mock(Map.class);
@@ -313,7 +355,6 @@ public class ConnectionImplTest {
     @Test
     public void testCloseClosesNats() throws IOException, TimeoutException {
         // test ncOwned = false
-        logger.info("Case 1: ncOwned false");
         ConnectionImpl conn = (ConnectionImpl) newMockedConnection(false);
         assertNotNull(conn);
         assertFalse(conn.ncOwned);
@@ -322,7 +363,6 @@ public class ConnectionImplTest {
         assertNull(conn.nc);
 
         // test ncOwned = true && nc != null
-        logger.info("Case 2: ncOwned true, conn.nc != null");
         conn = (ConnectionImpl) newMockedConnection(true);
         assertNotNull(conn);
         assertTrue(conn.ncOwned);
@@ -331,14 +371,12 @@ public class ConnectionImplTest {
 
 
         // Now try with ncOwned == true and nc==null
-        logger.info("Case 3: ncOwned true, conn.nc == null");
         conn = (ConnectionImpl) newMockedConnection(true);
         assertTrue(conn.ncOwned);
         when(conn.getNatsConnection()).thenReturn(null);
         conn.close();
 
         // Now try with ncOwned == true and nc.close throws a runtime exception
-        logger.info("Case 4: ncOwned true, nc.close() throws NPE");
         conn = (ConnectionImpl) newMockedConnection(true);
         assertTrue(conn.ncOwned);
         io.nats.client.Connection mockNc = conn.getNatsConnection();
@@ -501,6 +539,19 @@ public class ConnectionImplTest {
     }
 
     @Test
+    public void testPublishPubAckChanPutInterrupted()
+            throws IOException, TimeoutException, InterruptedException {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
+            doThrow(new InterruptedException("test")).when(pubAckChanMock).put(any(PubAck.class));
+            conn.setPubAckChan(pubAckChanMock);
+            io.nats.client.Message msg = new io.nats.client.Message();
+            conn.publish("testPublishStringByteArray", "Hello World".getBytes());
+            verifier.verifyLogMsgEquals(Level.WARN, "Publish operation interrupted");
+        }
+    }
+
+
+    @Test
     public void testPublishStringByteArray() {
         String subj = "testPublishStringByteArray";
         byte[] payload = "Hello World".getBytes();
@@ -515,16 +566,16 @@ public class ConnectionImplTest {
     }
 
     @Test
-    public void testPublishThrowsEx() throws IOException, TimeoutException {
+    public void testPublishThrowsEx() throws IOException, TimeoutException, InterruptedException {
         thrown.expect(IOException.class);
         String subj = "testPublishStringByteArrayThrowsEx";
         byte[] payload = "Hello World".getBytes();
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             @SuppressWarnings("unchecked")
-            BlockingQueue<Exception> mockCh = (BlockingQueue<Exception>) mock(BlockingQueue.class);
+            BlockingQueue<String> mockCh = (BlockingQueue<String>) mock(BlockingQueue.class);
             when(mockCh.size()).thenReturn(1);
-            when(mockCh.poll()).thenReturn(new IOException("test exception"));
-            when(conn.createExceptionChannel()).thenReturn(mockCh);
+            when(mockCh.take()).thenReturn("test exception");
+            when(conn.createErrorChannel()).thenReturn(mockCh);
             conn.publish(subj, payload);
         }
     }
@@ -761,7 +812,7 @@ public class ConnectionImplTest {
             try {
                 conn.subscribe("foo", "bar", null, subOpts);
             } catch (Exception e) {
-                e.printStackTrace();
+                // e.printStackTrace();
                 throw e;
             }
         }
@@ -851,7 +902,7 @@ public class ConnectionImplTest {
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckHandler ah = mock(AckHandler.class);
-            BlockingQueue<Exception> ch = new LinkedBlockingQueue<Exception>();
+            BlockingQueue<String> ch = new LinkedBlockingQueue<String>();
             AckClosure ac = conn.createAckClosure(ah, ch);
             conn.pubAckMap.put(guid, ac);
             io.nats.client.Message raw =
@@ -865,17 +916,59 @@ public class ConnectionImplTest {
     }
 
     @Test
-    public void testProcessAckNonEmptyErrorField() {
+    public void testProcessAckNonEmptyErrorField()
+            throws IOException, TimeoutException, InterruptedException {
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
-            String guid = NUID.nextGlobal();
+            final String guid = NUID.nextGlobal();
+            @SuppressWarnings("unchecked")
+            LinkedBlockingQueue<String> ch =
+                    (LinkedBlockingQueue<String>) mock(LinkedBlockingQueue.class);
+            AckClosure ac = conn.createAckClosure(null, ch);
+            conn.pubAckMap.put(guid, ac);
+            PubAck pa = PubAck.newBuilder().setGuid(guid).setError("ERROR").build();
+            io.nats.client.Message raw = new io.nats.client.Message("foo", "bar", pa.toByteArray());
+            // test for synchronous -- i.e. error is written to channel
+            conn.processAck(raw);
+            verify(ch, times(1)).put(eq("ERROR"));
+        }
+    }
+
+    @Test
+    public void testProcessAckNonEmptyErrorFieldWithAckHandler()
+            throws IOException, TimeoutException {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
+            final String guid = NUID.nextGlobal();
             AckHandler ah = mock(AckHandler.class);
-            BlockingQueue<Exception> ch = new LinkedBlockingQueue<Exception>();
+            @SuppressWarnings("unchecked")
+            BlockingQueue<String> ch = (BlockingQueue<String>) mock(BlockingQueue.class);
             AckClosure ac = conn.createAckClosure(ah, ch);
             conn.pubAckMap.put(guid, ac);
             PubAck pa = PubAck.newBuilder().setGuid(guid).setError("ERROR").build();
             io.nats.client.Message raw = new io.nats.client.Message("foo", "bar", pa.toByteArray());
+            // test for path where ackhandler exists
             conn.processAck(raw);
-            verifier.verifyLogMsgEquals(Level.ERROR, "stan: protobuf PubAck error: ERROR");
+            verify(ah, times(1)).onAck(eq(guid), any(IOException.class));
+
+        }
+    }
+
+    @Test
+    public void testProcessAckErrChanPutInterrupted() {
+        try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
+            final String guid = NUID.nextGlobal();
+            @SuppressWarnings("unchecked")
+            BlockingQueue<String> ch = (BlockingQueue<String>) mock(BlockingQueue.class);
+            doThrow(new InterruptedException("test")).when(ch).put(anyString());
+
+            AckClosure ac = conn.createAckClosure(null, ch);
+            conn.pubAckMap.put(guid, ac);
+            PubAck pa = PubAck.newBuilder().setGuid(guid).setError("ERROR").build();
+            io.nats.client.Message raw = new io.nats.client.Message("foo", "bar", pa.toByteArray());
+
+            setLogLevel(Level.DEBUG);
+            conn.processAck(raw);
+            verifier.verifyLogMsgEquals(Level.DEBUG, "stan: processAck interrupted");
+            verify(ch, times(1)).put(eq("ERROR"));
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -916,31 +1009,37 @@ public class ConnectionImplTest {
     }
 
     @Test
-    public void testRemoveAckSuccess() {
+    public void testRemoveAckSuccess() throws IOException, TimeoutException, InterruptedException {
         try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
-            when(pac.take()).thenReturn(PubAck.getDefaultInstance());
-            String guid = NUID.nextGlobal();
-            TimerTask ackTask = mock(TimerTask.class);
-            AckClosure ac = mock(AckClosure.class);
-            ac.ackTask = ackTask;
-            BlockingQueue<Exception> ch = new LinkedBlockingQueue<Exception>();
-            ac.ch = ch;
-            conn.pubAckMap.put(guid, ac);
+            final String guid = NUID.nextGlobal();
+            final TimerTask ackTask = mock(TimerTask.class);
+            final AckHandler ackHandler = mock(AckHandler.class);
+            final AckClosure acMock = mock(AckClosure.class);
+
+            conn.setPubAckMap(pubAckMapMock);
+            conn.setPubAckChan(pubAckChanMock);
+
+            // Setup ackClosure
+            acMock.ackTask = ackTask;
+            acMock.ah = ackHandler;
+
+            // Setup pubAckMapMock
+            when(pubAckMapMock.get(eq(guid))).thenReturn(acMock);
+
+            // Setup pubAckChanMock
+            when(pubAckChanMock.size()).thenReturn(1);
+            when(pubAckChanMock.take()).thenReturn(PubAck.getDefaultInstance());
 
             // Should return our AckClosure
-            assertEquals(ac, conn.removeAck(guid));
-
-            // Should no longer be in the pubAckMap
-            assertNull(conn.pubAckMap.get(guid));
-
-            // aclTask should be null
-            assertNull(ac.ackTask);
+            AckClosure ac = conn.removeAck(guid);
+            assertEquals(acMock, ac);
+            verify(pubAckMapMock, times(1)).remove(guid);
 
             // ackTask should have been canceled
             verify(ackTask, times(1)).cancel();
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail(e.getMessage());
+
+            // Should have called pubAckChanMock.take()
+            verify(pubAckChanMock, times(1)).take();
         }
     }
 
@@ -951,15 +1050,15 @@ public class ConnectionImplTest {
         thrown.expectMessage("Test");
 
         try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
-            when(pac.take()).thenReturn(PubAck.getDefaultInstance());
+            when(pubAckChanMock.take()).thenReturn(PubAck.getDefaultInstance());
             TimerTask ackTask = mock(TimerTask.class);
             AckClosure ac = mock(AckClosure.class);
             final String guid = NUID.nextGlobal();
             ac.ackTask = ackTask;
-            BlockingQueue<Exception> ch = new LinkedBlockingQueue<Exception>();
+            BlockingQueue<String> ch = new LinkedBlockingQueue<String>();
             ac.ch = ch;
-            conn.setPubAckMap(pubAckMap);
-            doThrow(new UnsupportedOperationException("Test")).when(pubAckMap).get(guid);
+            conn.setPubAckMap(pubAckMapMock);
+            doThrow(new UnsupportedOperationException("Test")).when(pubAckMapMock).get(guid);
             // conn.pubAckMap.put(guid, ac);
 
             conn.removeAck(guid);
@@ -970,10 +1069,10 @@ public class ConnectionImplTest {
     public void testRemoveAckNullTimerTask()
             throws IOException, TimeoutException, InterruptedException {
         try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
-            when(pac.take()).thenReturn(PubAck.getDefaultInstance());
+            when(pubAckChanMock.take()).thenReturn(PubAck.getDefaultInstance());
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
-            BlockingQueue<Exception> ch = new LinkedBlockingQueue<Exception>();
+            BlockingQueue<String> ch = new LinkedBlockingQueue<String>();
             ac.ch = ch;
             conn.pubAckMap.put(guid, ac);
 
@@ -987,8 +1086,8 @@ public class ConnectionImplTest {
     public void testRemoveAckNullAckClosure()
             throws InterruptedException, IOException, TimeoutException {
         try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
-            when(pac.take()).thenReturn(PubAck.getDefaultInstance());
-            when(pac.size()).thenReturn(0);
+            when(pubAckChanMock.take()).thenReturn(PubAck.getDefaultInstance());
+            when(pubAckChanMock.size()).thenReturn(0);
             String guid = NUID.nextGlobal();
 
             assertNull(conn.pubAckMap.get(guid));
@@ -996,10 +1095,46 @@ public class ConnectionImplTest {
             // Should return null
             assertNull(conn.removeAck(guid));
 
-            // Should not have called pac.get()
-            verify(pac, never()).take();
+            // Should not have called pubAckChanMock.get()
+            verify(pubAckChanMock, never()).take();
         }
     }
+
+    @Test
+    public void testRemoveAckTakeInterrupted()
+            throws InterruptedException, IOException, TimeoutException {
+        try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
+            final String guid = NUID.nextGlobal();
+
+            // Set the mocks
+            conn.setPubAckMap(pubAckMapMock);
+            conn.setPubAckChan(pubAckChanMock);
+
+            // setup pubAckChanMock
+            doThrow(new InterruptedException("test")).when(pubAckChanMock).take();
+            when(pubAckChanMock.size()).thenReturn(99);
+            assertEquals(99, pubAckChanMock.size());
+
+            // setup acMock
+            AckClosure acMock = mock(AckClosure.class);
+
+            // setup pubAckMapMock
+            when(pubAckMapMock.get(eq(guid))).thenReturn(acMock);
+            assertEquals(acMock, pubAckMapMock.get(guid));
+
+            // Run the unit
+            AckClosure ac = conn.removeAck(guid);
+            assertEquals(acMock, ac);
+            verify(pubAckMapMock, times(1)).remove(guid);
+
+            // Should not have called pubAckChanMock.take()
+            verify(pubAckChanMock, times(1)).take();
+
+            // Should have logged the exception
+            verifier.verifyLogMsgMatches(Level.WARN, "stan: interrupted during removeAck for .+$");
+        }
+    }
+
 
     @Test
     public void testOnMessage() {
@@ -1052,8 +1187,8 @@ public class ConnectionImplTest {
     public void testProcessMsgRuntimeExceptions() {
         String subject = "foo";
         try (final ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
-            conn.setSubMap(subMap);
-            assertEquals(subMap, conn.getSubMap());
+            conn.setSubMap(subMapMock);
+            assertEquals(subMapMock, conn.getSubMap());
             MessageHandler mockCb = mock(MessageHandler.class);
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
@@ -1070,7 +1205,7 @@ public class ConnectionImplTest {
             io.nats.client.Message raw =
                     new io.nats.client.Message("foo", ackSubject, msgp.toByteArray());
 
-            when(subMap.get(subject)).thenReturn(mockSub);
+            when(subMapMock.get(subject)).thenReturn(mockSub);
             when(mockSub.getOptions()).thenReturn(null);
             try {
                 conn.processMsg(raw);
@@ -1080,7 +1215,7 @@ public class ConnectionImplTest {
             verify(mockCb, never()).onMessage(any(Message.class));
             verify(conn.nc, never()).publish(eq(ackSubject), any(byte[].class));
 
-            doThrow(new NullPointerException()).when(subMap).get(eq(subject));
+            doThrow(new NullPointerException()).when(subMapMock).get(eq(subject));
             try {
                 conn.processMsg(raw);
             } catch (Exception e) {
@@ -1319,21 +1454,27 @@ public class ConnectionImplTest {
     }
 
     @Test
-    public void testCreateAckTimerTask() throws IOException, TimeoutException {
+    public void testCreateAckTimerTaskAndExecute() throws IOException, TimeoutException {
         final String guid = NUID.nextGlobal();
+        final CountDownLatch latch = new CountDownLatch(1);
         AckHandler ah = new AckHandler() {
-            public void onAck(String nuid, Exception ex) {}
+            public void onAck(String nuid, Exception ex) {
+                assertEquals(guid, nuid);
+                assertTrue(ex instanceof TimeoutException);
+                assertEquals(ConnectionImpl.SERVER_ERR_TIMEOUT, ex.getMessage());
+                latch.countDown();
+            }
         };
-        // fail("Need to finish this test");
         try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
-            BlockingQueue<Exception> ch = new LinkedBlockingQueue<Exception>();
+            BlockingQueue<String> ch = new LinkedBlockingQueue<String>();
             AckClosure ac = conn.createAckClosure(ah, ch);
             Map<String, AckClosure> pubAckMap = conn.getPubAckMap();
             pubAckMap.put(guid, ac);
             assertEquals(ac, pubAckMap.get(guid));
             TimerTask ttask = conn.createAckTimerTask(guid, ah);
-            conn.ackTimer.schedule(ttask, 10);
-            sleep(100);
+            conn.ackTimer.schedule(ttask, 1000);
+            assertTrue(await(latch));
+            // pubAck should have been removed already
             assertNull(pubAckMap.get(guid));
         }
     }

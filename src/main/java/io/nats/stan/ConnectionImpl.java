@@ -76,6 +76,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     static final String SERVER_ERR_INVALID_DURABLE_NAME =
             "stan: durable name of a durable queue subscriber can't contain the character ':'";
     static final String SERVER_ERR_DURABLE_QUEUE = "stan: queue subscribers can't be durable";
+    static final String SERVER_ERR_TIMEOUT = "stan: publish ack timeout";
 
     static final Logger logger = LoggerFactory.getLogger(ConnectionImpl.class);
 
@@ -108,16 +109,18 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     }
 
     ConnectionImpl(String stanClusterId, String clientId) {
-        this(stanClusterId, clientId, new Options.Builder().create());
+        this(stanClusterId, clientId, null);
     }
 
     ConnectionImpl(String stanClusterId, String clientId, Options opts) {
         this.clusterId = stanClusterId;
         this.clientId = clientId;
-        this.opts = opts;
 
-        // Check if the user has provided a connection as an option
-        if (this.opts != null) {
+        if (opts == null) {
+            this.opts = new Options.Builder().create();
+        } else {
+            this.opts = opts;
+            // Check if the user has provided a connection as an option
             if (this.opts.getNatsConn() != null) {
                 setNatsConnection(this.opts.getNatsConn());
             }
@@ -218,7 +221,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             nc = getNatsConnection();
             if (nc == null) {
                 // We are already closed
-                logger.warn("stan: NATS connection already closed");
+                logger.debug("stan: NATS connection already closed");
                 return;
             }
             // if ncOwned, we close it in finally block
@@ -269,7 +272,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 try {
                     nc.close();
                 } catch (Exception ignore) {
-                    logger.warn("NATS connection was null in close()");
+                    logger.debug("NATS connection was null in close()");
                 }
             }
         } finally {
@@ -277,7 +280,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
     }
 
-    protected AckClosure createAckClosure(AckHandler ah, BlockingQueue<Exception> ch) {
+    protected AckClosure createAckClosure(AckHandler ah, BlockingQueue<String> ch) {
         return new AckClosure(ah, ch);
     }
 
@@ -307,17 +310,25 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
     }
 
-    BlockingQueue<Exception> createExceptionChannel() {
-        return new LinkedBlockingQueue<Exception>();
+    BlockingQueue<String> createErrorChannel() {
+        return new LinkedBlockingQueue<String>();
     }
 
     // Publish will publish to the cluster and wait for an ACK.
     @Override
     public void publish(String subject, byte[] data) throws IOException {
-        final BlockingQueue<Exception> ch = createExceptionChannel();
+        final BlockingQueue<String> ch = createErrorChannel();
         publish(subject, data, null, ch);
-        if (ch.size() != 0) {
-            throw new IOException(ch.poll());
+        String err = null;
+        try {
+            err = ch.take();
+            if (!err.isEmpty()) {
+                throw new IOException(err);
+            }
+        } catch (InterruptedException e) {
+            logger.debug("stan: publish interrupted");
+            logger.debug("Full stack trace:", e);
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -330,7 +341,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         return publish(subject, data, ah, null);
     }
 
-    String publish(String subject, byte[] data, AckHandler ah, BlockingQueue<Exception> ch)
+    String publish(String subject, byte[] data, AckHandler ah, BlockingQueue<String> ch)
             throws IOException {
         String subj = null;
         String ackSubject = null;
@@ -373,6 +384,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             pac.put(PubAck.getDefaultInstance());
         } catch (InterruptedException e) {
             logger.warn("Publish operation interrupted", e);
+            Thread.currentThread().interrupt();
         }
 
         try {
@@ -501,7 +513,6 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 srb.setStartTimeDelta(delta);
                 break;
             case UNRECOGNIZED:
-                break;
             default:
                 break;
         }
@@ -530,15 +541,24 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
         // Remove
         AckClosure ackClosure = removeAck(pa.getGuid());
+        if (ackClosure != null) {
+            // Capture error if it exists.
+            String ackError = pa.getError();
 
-        // Capture error if it exists.
-        if (!pa.getError().isEmpty()) {
-            logger.error("stan: protobuf PubAck error: {}", pa.getError());
-        }
-
-        // Perform the ackHandler callback
-        if (ackClosure != null && ackClosure.ah != null) {
-            ackClosure.ah.onAck(pa.getGuid(), ex);
+            if (ackClosure.ah != null) {
+                if (!ackError.isEmpty()) {
+                    ex = new IOException(ackError);
+                }
+                // Perform the ackHandler callback
+                ackClosure.ah.onAck(pa.getGuid(), ex);
+            } else if (ackClosure.ch != null) {
+                try {
+                    ackClosure.ch.put(ackError);
+                } catch (InterruptedException e) {
+                    logger.debug("stan: processAck interrupted");
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
     }
 
@@ -552,26 +572,32 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     protected AckClosure removeAck(String guid) {
         AckClosure ackClosure = null;
         BlockingQueue<PubAck> pac = null;
+        TimerTask timerTask = null;
         this.lock();
         try {
             ackClosure = (AckClosure) pubAckMap.get(guid);
-            pubAckMap.remove(guid);
+            if (ackClosure != null) {
+                timerTask = ackClosure.ackTask;
+                pubAckMap.remove(guid);
+            }
             pac = pubAckChan;
         } finally {
             this.unlock();
         }
 
         // Cancel timer if needed
-        if (ackClosure != null && ackClosure.ackTask != null) {
-            ackClosure.ackTask.cancel();
-            ackClosure.ackTask = null;
+        if (timerTask != null) {
+            timerTask.cancel();
         }
 
         // Remove from channel to unblock async publish
         if (ackClosure != null && pac.size() > 0) {
             try {
+                // remove from queue to unblock publish
                 pac.take();
             } catch (InterruptedException e) {
+                logger.warn("stan: interrupted during removeAck for {}", guid);
+                logger.debug("Full stack trace:", e);
                 Thread.currentThread().interrupt();
             }
         }
@@ -727,9 +753,9 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     class AckClosure {
         protected TimerTask ackTask;
         AckHandler ah;
-        BlockingQueue<Exception> ch;
+        BlockingQueue<String> ch;
 
-        AckClosure(final AckHandler ah, final BlockingQueue<Exception> ch) {
+        AckClosure(final AckHandler ah, final BlockingQueue<String> ch) {
             this.ah = ah;
             this.ch = ch;
         }
