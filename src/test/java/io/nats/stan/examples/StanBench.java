@@ -74,7 +74,7 @@ public class StanBench {
     private Benchmark bench;
 
     static final String usageString =
-            "\nUsage: nats-bench [-s server] [--tls] [-np num] [-ns num] [-n num] [-ms size] "
+            "\nUsage: nats-bench [-s server] [--tls] [-np numMsgs] [-ns numMsgs] [-n numMsgs] [-ms size] "
                     + "[-csv file] <subject>\n\nOptions:\n"
                     + "    -s   <urls>                     NATS server URLs (separated by comma)\n"
                     + "    -tls                            Use TLS secure connection\n"
@@ -109,16 +109,15 @@ public class StanBench {
 
     class Worker implements Runnable {
         protected final Phaser phaser;
-        protected final int num;
+        protected final int numMsgs;
         protected final int size;
-        protected final boolean ignoreOld;
         protected final String workerClientId;
 
-        Worker(Phaser phaser, int numMsgs, int size, boolean ignoreOld, String workerClientId) {
+        Worker(Phaser phaser, int numMsgs, int size, String workerClientId) {
+            Thread.currentThread().setName(workerClientId);
             this.phaser = phaser;
-            this.num = numMsgs;
+            this.numMsgs = numMsgs;
             this.size = size;
-            this.ignoreOld = ignoreOld;
             this.workerClientId = workerClientId;
         }
 
@@ -127,8 +126,11 @@ public class StanBench {
     }
 
     class SubWorker extends Worker {
+        private final boolean ignoreOld;
+
         SubWorker(Phaser phaser, int numMsgs, int size, boolean ignoreOld, String subId) {
-            super(phaser, numMsgs, size, ignoreOld, subId);
+            super(phaser, numMsgs, size, subId);
+            this.ignoreOld = ignoreOld;
         }
 
         @Override
@@ -207,10 +209,15 @@ public class StanBench {
         }
     }
 
-
     class PubWorker extends Worker {
-        PubWorker(Phaser phaser, int numMsgs, int size, boolean ignoreOld, String pubId) {
-            super(phaser, numMsgs, size, ignoreOld, pubId);
+        private final boolean async;
+        private final int maxPubAcks;
+
+        PubWorker(Phaser phaser, int numMsgs, int size, boolean async, String pubId,
+                int maxPubAcks) {
+            super(phaser, numMsgs, size, pubId);
+            this.async = async;
+            this.maxPubAcks = maxPubAcks;
         }
 
         @Override
@@ -227,7 +234,7 @@ public class StanBench {
         public void runPublisher() throws Exception {
             final ConnectionFactory cf = new ConnectionFactory(clusterId, workerClientId);
             if (maxPubAcksInFlight > 0) {
-                cf.setMaxPubAcksInFlight(maxPubAcksInFlight);
+                cf.setMaxPubAcksInFlight(maxPubAcks);
             }
 
             final io.nats.client.Connection nc = natsConnFactory.createConnection();
@@ -301,8 +308,9 @@ public class StanBench {
         List<Integer> pubCounts = io.nats.benchmark.Utils.msgsPerClient(numMsgs, numPubs);
         for (int i = 0; i < numPubs; i++) {
             phaser.register();
-            String subId = String.format("%s-pub-%d", clientId, i);
-            exec.execute(new PubWorker(phaser, pubCounts.get(i), size, ignoreOld, subId));
+            String pubId = String.format("%s-pub-%d", clientId, i);
+            exec.execute(new PubWorker(phaser, pubCounts.get(i), size, async, pubId,
+                    maxPubAcksInFlight));
         }
 
         System.out.printf("Starting benchmark [msgs=%d, msgsize=%d, pubs=%d, subs=%d]\n", numMsgs,
