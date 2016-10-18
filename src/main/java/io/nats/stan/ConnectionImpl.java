@@ -328,7 +328,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         } catch (InterruptedException e) {
             logger.debug("stan: publish interrupted");
             logger.debug("Full stack trace:", e);
-            Thread.currentThread().interrupt();
+            // Thread.currentThread().interrupt();
         }
     }
 
