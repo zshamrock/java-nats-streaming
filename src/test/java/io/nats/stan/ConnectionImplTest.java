@@ -791,7 +791,14 @@ public class ConnectionImplTest {
             sr = SubscriptionRequest.parseFrom(argument.getValue());
             assertEquals(StartPosition.TimeDeltaStart, sr.getStartPosition());
             // since StartAtTimeDelta recalculates
-            assertTrue(sr.getStartTimeDelta() - delta.toNanos() <= Duration.ofMillis(10).toNanos());
+            long difference = sr.getStartTimeDelta() - delta.toNanos();
+            long tolerance = Duration.ofMillis(10).toNanos();
+            String errMsg =
+                    String.format(
+                            "Expected start time to be within %dms of requested time for "
+                                    + "TimeDeltaStart, but difference was %dms",
+                            tolerance, difference);
+            assertTrue(errMsg, difference <= tolerance);
 
         } catch (IOException | TimeoutException e) {
             e.printStackTrace();
