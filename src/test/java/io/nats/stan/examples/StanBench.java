@@ -74,8 +74,8 @@ public class StanBench {
     private Benchmark bench;
 
     static final String usageString =
-            "\nUsage: nats-bench [-s server] [--tls] [-np numMsgs] [-ns numMsgs] [-n numMsgs] [-ms size] "
-                    + "[-csv file] <subject>\n\nOptions:\n"
+            "\nUsage: nats-bench [-s server] [--tls] [-id clientid] [-np #pubs] [-ns #subs] [-n #msg] [-mpa #pubacks] [-ms size] "
+                    + "[-io] [-a] [-csv file] <subject>\n\nOptions:\n"
                     + "    -s   <urls>                     NATS server URLs (separated by comma)\n"
                     + "    -tls                            Use TLS secure connection\n"
                     + "    -np                             Number of concurrent publishers\n"
@@ -362,6 +362,9 @@ public class StanBench {
         subject = argList.get(argList.size() - 1);
         argList.remove(argList.size() - 1);
 
+        if (subject.startsWith("-")) {
+            usage();
+        }
 
         // Anything left is flags + args
         Iterator<String> it = argList.iterator();
