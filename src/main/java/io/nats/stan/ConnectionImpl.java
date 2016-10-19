@@ -284,15 +284,6 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         return new AckClosure(ah, ch);
     }
 
-    TimerTask createAckTimerTask(String guid, AckHandler ah) {
-        TimerTask task = new java.util.TimerTask() {
-            public void run() {
-                processAckTimeout(guid, ah);
-            }
-        };
-        return task;
-    }
-
     protected SubscriptionImpl createSubscription(String subject, String qgroup,
             io.nats.stan.MessageHandler cb, ConnectionImpl conn, SubscriptionOptions opts) {
         SubscriptionImpl sub = new SubscriptionImpl(subject, qgroup, cb, conn, opts);
@@ -318,10 +309,16 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     @Override
     public void publish(String subject, byte[] data) throws IOException {
         final BlockingQueue<String> ch = createErrorChannel();
+        // Instant t0 = Instant.now();
         publish(subject, data, null, ch);
+        // Instant t1 = Instant.now();
         String err = null;
         try {
             err = ch.take();
+            // Instant t2 = Instant.now();
+            // logger.info("publish took {}ns, ch.take() took {}ns, total r/t took {}ns",
+            // Duration.between(t0, t1).toNanos(), Duration.between(t1, t2).toNanos(),
+            // Duration.between(t0, t2).toNanos());
             if (!err.isEmpty()) {
                 throw new IOException(err);
             }
@@ -397,7 +394,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         // Setup the timer for expiration.
         this.lock();
         try {
-            a.ackTask = createAckTimerTask(guid, ah);
+            a.ackTask = createAckTimerTask(guid);
             ackTimer.schedule(a.ackTask, ackTimeout.toMillis());
         } catch (Exception e) {
             throw e;
@@ -562,10 +559,25 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         }
     }
 
-    protected void processAckTimeout(String guid, AckHandler ah) {
-        removeAck(guid);
-        if (ah != null) {
-            ah.onAck(guid, new TimeoutException(ERR_TIMEOUT));
+    TimerTask createAckTimerTask(String guid) {
+        TimerTask task = new java.util.TimerTask() {
+            public void run() {
+                processAckTimeout(guid);
+            }
+        };
+        return task;
+    }
+
+    protected void processAckTimeout(String guid) {
+        AckClosure ackClosure = removeAck(guid);
+        if (ackClosure.ah != null) {
+            ackClosure.ah.onAck(guid, new TimeoutException(ERR_TIMEOUT));
+        } else if (ackClosure.ch != null) {
+            try {
+                ackClosure.ch.put(ERR_TIMEOUT);
+            } catch (InterruptedException e) {
+                logger.warn("stan: processAckTimeout interrupted");
+            }
         }
     }
 
@@ -598,7 +610,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             } catch (InterruptedException e) {
                 logger.warn("stan: interrupted during removeAck for {}", guid);
                 logger.debug("Full stack trace:", e);
-                Thread.currentThread().interrupt();
+                // Thread.currentThread().interrupt();
             }
         }
 

@@ -866,31 +866,31 @@ public class ConnectionImplTest {
     }
 
     @Test
-    public void testProcessAckTimeoutMethod() {
+    public void testProcessAckTimeoutMethod() throws IOException, TimeoutException {
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
-            ac.ah = mock(AckHandler.class);
+            AckHandler ahMock = mock(AckHandler.class);
+            ac.ah = ahMock;
             conn.getPubAckMap().put(guid, ac);
 
             // Test with non-null AckHandler
-            conn.processAckTimeout(guid, ac.ah);
+            conn.processAckTimeout(guid);
 
             // ackClosure should have been removed
             assertNull(conn.getPubAckMap().get(guid));
 
             // AckHandler should have been invoked
-            verify(ac.ah, times(1)).onAck(eq(guid), any(TimeoutException.class));
+            verify(ahMock, times(1)).onAck(eq(guid), any(TimeoutException.class));
 
             // Now test with null AckHandler
-            conn.processAckTimeout(guid, null);
+            conn.getPubAckMap().put(guid, ac);
+            ac.ah = null;
+            conn.processAckTimeout(guid);
 
             // No new invocation of AckHandler
-            verify(ac.ah, times(1)).onAck(eq(guid), any(TimeoutException.class));
+            verify(ahMock, times(1)).onAck(eq(guid), any(TimeoutException.class));
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail(e.getMessage());
         }
     }
 
@@ -1468,7 +1468,7 @@ public class ConnectionImplTest {
             Map<String, AckClosure> pubAckMap = conn.getPubAckMap();
             pubAckMap.put(guid, ac);
             assertEquals(ac, pubAckMap.get(guid));
-            TimerTask ttask = conn.createAckTimerTask(guid, ah);
+            TimerTask ttask = conn.createAckTimerTask(guid);
             conn.ackTimer.schedule(ttask, 1000);
             assertTrue(await(latch));
             // pubAck should have been removed already
