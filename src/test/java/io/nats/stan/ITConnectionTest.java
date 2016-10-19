@@ -8,7 +8,6 @@ package io.nats.stan;
 
 import static io.nats.stan.UnitTestUtilities.runServer;
 import static io.nats.stan.UnitTestUtilities.sleep;
-import static io.nats.stan.UnitTestUtilities.waitTime;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -18,7 +17,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import io.nats.client.Channel;
 import io.nats.stan.protobuf.StartPosition;
 
 import com.google.common.base.Stopwatch;
@@ -45,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -72,6 +71,10 @@ public class ITConnectionTest {
 
     @After
     public void tearDown() throws Exception {}
+
+    public Connection newDefaultConnection() throws IOException, TimeoutException {
+        return new ConnectionFactory(clusterName, clientName).createConnection();
+    }
 
     @Test
     public void testNoNats() {
@@ -116,6 +119,17 @@ public class ITConnectionTest {
         }
     }
 
+    // @Test
+    // public void testConnClosedOnConnectFailure() throws IOException, TimeoutException {
+    // try (STANServer s = runDefaultServer()) {
+    // try (Connection sc = newDefaultConnection()) {
+    // // Non-Existent or Unreachable
+    // int connectTime = 25;
+    //
+    // }
+    // }
+    // }
+
     @Test
     public void testBasicConnect() {
         try (STANServer s = runServer(clusterName, false)) {
@@ -143,8 +157,8 @@ public class ITConnectionTest {
     }
 
     @Test
-    public void testBasicPublishAsync() {
-        final Channel<Boolean> ch = new Channel<Boolean>();
+    public void testBasicPublishAsync() throws InterruptedException, IOException, TimeoutException {
+        final CountDownLatch latch = new CountDownLatch(1);
         final String[] cbguid = new String[1];
         // final Lock glock = new ReentrantLock();
         // Run a STAN server
@@ -154,23 +168,22 @@ public class ITConnectionTest {
                 AckHandler acb = new AckHandler() {
                     public void onAck(String lguid, Exception ex) {
                         cbguid[0] = lguid;
-                        ch.add(true);
+                        latch.countDown();
                     }
                 };
                 String pubguid = sc.publish("foo", "Hello World!".getBytes(), acb);
                 assertFalse("Expected non-empty guid to be returned", pubguid.isEmpty());
 
-                assertTrue("Did not receive our ack callback", waitTime(ch, 5, TimeUnit.SECONDS));
+                assertTrue("Did not receive our ack callback", latch.await(5, TimeUnit.SECONDS));
                 assertEquals("Expected a matching guid in ack callback", pubguid, cbguid[0]);
-            } catch (IOException | TimeoutException e) {
-                fail(e.getMessage());
             }
         }
     }
 
     @Test
-    public void testTimeoutPublishAsync() {
-        final Channel<Boolean> ch = new Channel<Boolean>();
+    public void testTimeoutPublishAsync()
+            throws IOException, TimeoutException, InterruptedException {
+        final CountDownLatch latch = new CountDownLatch(1);
         final String[] guid = new String[1];
         final Lock glock = new ReentrantLock();
         // Run a STAN server
@@ -188,7 +201,7 @@ public class ITConnectionTest {
                             assertTrue(ex instanceof TimeoutException);
                             assertEquals("Expected a matching guid in ack callback",
                                     ex.getMessage(), ConnectionImpl.ERR_TIMEOUT);
-                            ch.add(true);
+                            latch.countDown();
                         } finally {
                             glock.unlock();
                         }
@@ -205,10 +218,13 @@ public class ITConnectionTest {
                 }
 
                 assertTrue("Did not receive our ack callback with a timeout err",
-                        waitTime(ch, 5, TimeUnit.SECONDS));
-            } catch (IOException | TimeoutException e) {
-                assertTrue(e instanceof TimeoutException);
-                assertEquals(ConnectionImpl.ERR_CLOSE_REQ_TIMEOUT, e.getMessage());
+                        latch.await(5, TimeUnit.SECONDS));
+            } catch (TimeoutException e) {
+                if (e.getMessage().equals("stan: close request timeout")) {
+                    /* NOOP */
+                } else {
+                    throw e;
+                }
             }
         }
     }
@@ -235,44 +251,123 @@ public class ITConnectionTest {
     }
 
     @Test
-    public void testBasicQueueSubscription() {
+    public void testBasicQueueSubscription()
+            throws IOException, TimeoutException, InterruptedException {
         // Run a STAN server
-        try (STANServer s = runServer(clusterName, false)) {
+        try (STANServer s = runServer(clusterName)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
-                try (Subscription sub = sc.subscribe("foo", "bar", new MessageHandler() {
-                    public void onMessage(Message msg) {}
-                })) {
-                    // do nothing
-                }
-                boolean exThrown = false;
-                // Test that we cannot set durable status on queue subscribers.
-                SubscriptionOptions sopts = new SubscriptionOptions.Builder()
-                        .setDurableName("durable-queue-sub").build();
-                try (Subscription sub = sc.subscribe("foo", "bar", new MessageHandler() {
-                    public void onMessage(Message msg) {}
-                }, sopts)) {
-                    // do nothing
-                } catch (Exception e) {
-                    assertEquals(ConnectionImpl.SERVER_ERR_DURABLE_QUEUE, e.getMessage());
-                    exThrown = true;
-                }
-                assertTrue("Expected exception to be thrown on queue subscribe with durable name",
-                        exThrown);
+                final AtomicInteger count = new AtomicInteger();
+                final CountDownLatch latch = new CountDownLatch(1);
+                MessageHandler cb = new MessageHandler() {
+                    public void onMessage(Message msg) {
+                        if (msg.getSequence() == 1) {
+                            if (count.incrementAndGet() == 2) {
+                                latch.countDown();
+                            }
+                        }
+                    }
+                };
 
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Should have connected successfully, but got: " + e.getMessage());
+                try (Subscription sub = sc.subscribe("foo", "bar", cb)) {
+                    // Test that durable and non durable queue subscribers with
+                    // same name can coexist and they both receive the same message.
+                    SubscriptionOptions sopts = new SubscriptionOptions.Builder()
+                            .setDurableName("durable-queue-sub").build();
+                    try (Subscription sub2 = sc.subscribe("foo", "bar", cb, sopts)) {
+
+                        // Publish a message
+                        sc.publish("foo", "msg".getBytes());
+
+                        // Wait for both copies of the message to be received.
+                        assertTrue("Did not get our message", latch.await(5, TimeUnit.SECONDS));
+
+                    } catch (Exception e) {
+                        fail("Unexpected error on queue subscribe with durable name");
+                    }
+
+                    // Check that one cannot use ':' for the queue durable name.
+                    sopts = new SubscriptionOptions.Builder().setDurableName("my:dur").build();
+                    boolean exThrown = false;
+                    try (Subscription sube = sc.subscribe("foo", "bar", cb, sopts)) {
+                        // do nothing?
+                    } catch (IOException e) {
+                        assertEquals(ConnectionImpl.SERVER_ERR_INVALID_DURABLE_NAME,
+                                e.getMessage());
+                        exThrown = true;
+                    } finally {
+                        assertTrue("Expected to get an error regarding durable name", exThrown);
+                    }
+
+                }
+
             }
         }
     }
 
     @Test
-    public void testBasicPubSub() {
+    public void testDurableQueueSubscriber()
+            throws IOException, TimeoutException, InterruptedException {
+        final long total = 5;
+        final long firstBatch = total;
+        final long secondBatch = 2 * total;
+        try (STANServer s = runServer(clusterName)) {
+            try (Connection sc = newDefaultConnection()) {
+                for (int i = 0; i < total; i++) {
+                    sc.publish("foo", "msg".getBytes());
+                }
+                final CountDownLatch latch = new CountDownLatch(1);
+                MessageHandler cb = new MessageHandler() {
+                    public void onMessage(Message msg) {
+                        if (!msg.isRedelivered() && (msg.getSequence() == firstBatch
+                                || msg.getSequence() == secondBatch)) {
+                            latch.countDown();
+                        }
+                    }
+                };
+                sc.subscribe("foo", "bar", cb, new SubscriptionOptions.Builder()
+                        .deliverAllAvailable().setDurableName("durable-queue-sub").build());
+
+                assertTrue("Did not get our message", latch.await(5, TimeUnit.SECONDS));
+                // Give a chance to ACKs to make it to the server.
+                // This step is not necessary. Worst could happen is that messages
+                // are redelivered. This is why we check on !msg.getRedelivered() in the
+                // callback to validate the counts.
+                sleep(500, TimeUnit.MILLISECONDS);
+            }
+
+            // Create new connection
+            try (Connection sc = newDefaultConnection()) {
+                final CountDownLatch latch = new CountDownLatch(1);
+                MessageHandler cb = new MessageHandler() {
+                    public void onMessage(Message msg) {
+                        if (!msg.isRedelivered() && (msg.getSequence() == firstBatch
+                                || msg.getSequence() == secondBatch)) {
+                            latch.countDown();
+                        }
+                    }
+                };
+                for (int i = 0; i < total; i++) {
+                    sc.publish("foo", "msg".getBytes());
+                }
+                // Create durable queue sub, it should receive from where it left off,
+                // and ignore the start position
+                try (Subscription sub = sc.subscribe("foo", "bar", cb,
+                        new SubscriptionOptions.Builder().startAtSequence(10 * total)
+                                .setDurableName("durable-queue-sub").build())) {
+                    assertTrue(latch.await(5, TimeUnit.SECONDS));
+                }
+            }
+
+        }
+    }
+
+    @Test
+    public void testBasicPubSub() throws IOException, TimeoutException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final int toSend = 500;
                 final byte[] hw = "Hello World".getBytes();
@@ -290,7 +385,7 @@ public class ITConnectionTest {
                         msgMap.put(msg.getSequence(), new Object());
 
                         if (received.incrementAndGet() >= toSend) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 })) {
@@ -304,23 +399,21 @@ public class ITConnectionTest {
                     }
 
                     assertTrue("Did not receive all our messages",
-                            waitTime(ch, 1, TimeUnit.SECONDS));
+                            latch.await(1, TimeUnit.SECONDS));
                 } catch (Exception e) {
                     fail(e.getMessage());
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testBasicPubSubFlowControl() {
+    public void testBasicPubSubFlowControl()
+            throws IOException, TimeoutException, InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final int toSend = 500;
                 final byte[] hw = "Hello World".getBytes();
@@ -330,7 +423,7 @@ public class ITConnectionTest {
                 try (Subscription sub = sc.subscribe("foo", new MessageHandler() {
                     public void onMessage(Message msg) {
                         if (received.incrementAndGet() >= toSend) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 }, opts)) {
@@ -343,24 +436,18 @@ public class ITConnectionTest {
                         }
                     }
                     assertTrue("Did not receive all our messages",
-                            waitTime(ch, 5, TimeUnit.SECONDS));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    fail(e.getMessage());
+                            latch.await(5, TimeUnit.SECONDS));
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testBasicPubQueueSub() {
+    public void testBasicPubQueueSub() throws IOException, TimeoutException, InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final int toSend = 500;
                 final byte[] hw = "Hello World".getBytes();
@@ -374,7 +461,7 @@ public class ITConnectionTest {
                         assertNotEquals("Expected timestamp to be set", 0, msg.getTimestamp());
 
                         if (received.incrementAndGet() >= toSend) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 })) {
@@ -388,14 +475,8 @@ public class ITConnectionTest {
                     }
 
                     assertTrue("Did not receive all our messages",
-                            waitTime(ch, 1, TimeUnit.SECONDS));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    fail("Exception while creating subscription: " + e.getMessage());
+                            latch.await(1, TimeUnit.SECONDS));
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
@@ -438,18 +519,17 @@ public class ITConnectionTest {
     // }
 
     @Test
-    public void testAsyncPubSub() {
+    public void testAsyncPubSub() throws IOException, TimeoutException, InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
-            ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
-            try (ConnectionImpl sc = (ConnectionImpl) cf.createConnection()) {
-                final Channel<Boolean> ch = new Channel<Boolean>();
+            try (ConnectionImpl sc = (ConnectionImpl) newDefaultConnection()) {
+                final CountDownLatch latch = new CountDownLatch(1);
                 final byte[] hw = "Hello World".getBytes();
 
                 try (Subscription sub = sc.subscribe("foo", new MessageHandler() {
                     public void onMessage(Message msg) {
                         assertEquals("foo", msg.getSubject());
                         assertArrayEquals(hw, msg.getData());
-                        ch.add(true);
+                        latch.countDown();
                     }
                 })) {
                     try {
@@ -458,22 +538,15 @@ public class ITConnectionTest {
                         e.printStackTrace();
                         fail("Received error on publish: " + e.getMessage());
                     }
-
-                    assertTrue("Did not receive our message", waitTime(ch, 1, TimeUnit.SECONDS));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    fail(e.getMessage());
+                    assertTrue("Did not receive our message", latch.await(1, TimeUnit.SECONDS));
                 }
-
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testSubscriptionStartPositionLast() {
+    public void testSubscriptionStartPositionLast()
+            throws InterruptedException, IOException, TimeoutException {
         try (STANServer s = runServer(clusterName)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
@@ -487,14 +560,14 @@ public class ITConnectionTest {
                 }
 
                 // Now subscribe and set start position to last received.
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 MessageHandler mcb = new MessageHandler() {
                     public void onMessage(Message msg) {
                         received.incrementAndGet();
                         assertEquals("Wrong message sequence received", toSend, msg.getSequence());
                         savedMsgs.add(msg);
                         logger.debug("msg={}", msg);
-                        ch.add(true);
+                        latch.countDown();
                     }
                 };
 
@@ -508,7 +581,7 @@ public class ITConnectionTest {
                             sub.opts.getStartAt(), StartPosition.LastReceived);
 
                     // Make sure we got our message
-                    assertTrue("Did not receive our message", waitTime(ch, 5, TimeUnit.SECONDS));
+                    assertTrue("Did not receive our message", latch.await(5, TimeUnit.SECONDS));
                     if (received.get() != 1) {
                         logger.error("Should have received 1 message with sequence {}, "
                                 + "but got these {} messages:\n", toSend, savedMsgs.size());
@@ -522,21 +595,14 @@ public class ITConnectionTest {
                             savedMsgs.get(0).getSequence());
 
                     assertEquals(1, savedMsgs.size());
-                    assertEquals(0, ch.getCount());
-
-                } catch (IOException | TimeoutException e) {
-                    e.printStackTrace();
-                    fail(e.getMessage());
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testSubscriptionStartAtSequence() {
+    public void testSubscriptionStartAtSequence()
+            throws InterruptedException, IOException, TimeoutException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
@@ -557,7 +623,7 @@ public class ITConnectionTest {
                 }
                 assertTrue(exThrown);
 
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final int shouldReceive = 5;
 
@@ -568,7 +634,7 @@ public class ITConnectionTest {
                     public void onMessage(Message msg) {
                         savedMsgs.add(msg);
                         if (received.incrementAndGet() >= shouldReceive) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 };
@@ -579,7 +645,7 @@ public class ITConnectionTest {
                     assertEquals(StartPosition.SequenceStart, sub.getOptions().getStartAt());
                     assertEquals(6, sub.getOptions().getStartSequence());
 
-                    assertTrue("Did not receive our messages", waitTime(ch, 5, TimeUnit.SECONDS));
+                    assertTrue("Did not receive our messages", latch.await(5, TimeUnit.SECONDS));
 
                     // Check we received them in order
                     Iterator<Message> it = savedMsgs.iterator();
@@ -593,19 +659,14 @@ public class ITConnectionTest {
                         assertEquals(seq, dseq);
                         seq++;
                     }
-                } catch (IOException | TimeoutException e) {
-                    e.printStackTrace();
-                    fail("Subscription error: " + e.getMessage());
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testSubscriptionStartAtTime() {
+    public void testSubscriptionStartAtTime()
+            throws IOException, TimeoutException, InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
@@ -637,7 +698,7 @@ public class ITConnectionTest {
                 }
                 assertTrue("Should have thrown exception for bad startAtTime", exThrown);
 
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final int shouldReceive = 5;
 
@@ -648,7 +709,7 @@ public class ITConnectionTest {
                     public void onMessage(Message msg) {
                         savedMsgs.add(msg);
                         if (received.incrementAndGet() >= shouldReceive) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 };
@@ -659,7 +720,7 @@ public class ITConnectionTest {
                     assertEquals(StartPosition.TimeDeltaStart, sub.getOptions().getStartAt());
                     assertEquals(startTime, sub.getOptions().getStartTime());
 
-                    assertTrue("Did not receive our messages", waitTime(ch, 5, TimeUnit.SECONDS));
+                    assertTrue("Did not receive our messages", latch.await(5, TimeUnit.SECONDS));
 
                     // Check we received them in order
                     Iterator<Message> it = savedMsgs.iterator();
@@ -687,28 +748,30 @@ public class ITConnectionTest {
                     // Now test Ago helper
                     long delta = ChronoUnit.NANOS.between(startTime, Instant.now());
 
+                    final CountDownLatch latch2 = new CountDownLatch(1);
+                    MessageHandler mcb2 = new MessageHandler() {
+                        public void onMessage(Message msg) {
+                            savedMsgs.add(msg);
+                            if (received.incrementAndGet() >= shouldReceive) {
+                                latch2.countDown();
+                            }
+                        }
+                    };
+
                     try (Subscription sub2 =
-                            sc.subscribe("foo", mcb, new SubscriptionOptions.Builder()
+                            sc.subscribe("foo", mcb2, new SubscriptionOptions.Builder()
                                     .startAtTimeDelta(Duration.ofNanos(delta)).build())) {
                         assertTrue("Did not receive our messages",
-                                waitTime(ch, 5, TimeUnit.SECONDS));
-                    } catch (IOException | TimeoutException e) {
-                        e.printStackTrace();
-                        fail("Subscription error: " + e.getMessage());
+                                latch2.await(5, TimeUnit.SECONDS));
                     }
-                } catch (IOException | TimeoutException e) {
-                    e.printStackTrace();
-                    fail("Subscription error: " + e.getMessage());
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testSubscriptionStartAtFirst() {
+    public void testSubscriptionStartAtFirst()
+            throws InterruptedException, IOException, TimeoutException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
@@ -720,7 +783,7 @@ public class ITConnectionTest {
 
                 // sleep(200);
 
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final int shouldReceive = 10;
 
@@ -729,17 +792,11 @@ public class ITConnectionTest {
                 final Object lock = new Object();
                 MessageHandler mcb = new MessageHandler() {
                     public void onMessage(Message msg) {
-                        // TODO remove this
-                        // long id = Thread.currentThread().getId();
-
                         synchronized (lock) {
                             savedMsgs.add(msg);
                         }
-                        // logger.info("ThreadId {}: {}", id, m);
                         if (received.incrementAndGet() >= shouldReceive) {
-                            // logger.info("ThreadId {}: writing to channel",
-                            // id);
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 };
@@ -749,7 +806,7 @@ public class ITConnectionTest {
                         new SubscriptionOptions.Builder().deliverAllAvailable().build())) {
                     // Check for sub setup
                     assertEquals(StartPosition.First, sub.getOptions().getStartAt());
-                    assertTrue("Did not receive our messages", waitTime(ch, 5, TimeUnit.SECONDS));
+                    assertTrue("Did not receive our messages", latch.await(5, TimeUnit.SECONDS));
                     sleep(2000);
                     assertEquals("Got wrong number of msgs", shouldReceive, received.get());
                     assertEquals("Wrong number of msgs in map", shouldReceive, savedMsgs.size());
@@ -768,13 +825,7 @@ public class ITConnectionTest {
                             seq++;
                         }
                     }
-                } catch (IOException | TimeoutException e) {
-                    e.printStackTrace();
-                    fail("Subscription error: " + e.getMessage());
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
@@ -1066,7 +1117,7 @@ public class ITConnectionTest {
     }
 
     @Test
-    public void testManualAck() {
+    public void testManualAck() throws IOException, TimeoutException, InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
@@ -1079,7 +1130,7 @@ public class ITConnectionTest {
                 }
                 sc.publish("foo", hw);
 
-                final Channel<Boolean> fch = new Channel<Boolean>();
+                final CountDownLatch fch = new CountDownLatch(1);
 
                 // Test that we can't Ack if not in manual mode.
                 try (Subscription sub = sc.subscribe("foo", new MessageHandler() {
@@ -1092,20 +1143,19 @@ public class ITConnectionTest {
                             exThrown = true;
                         }
                         assertTrue("Expected manual ack exception", exThrown);
-                        fch.add(true);
+                        fch.countDown();
                     }
                 }, new SubscriptionOptions.Builder().deliverAllAvailable().build())) {
 
-                    assertTrue("Did not receive our first message",
-                            waitTime(fch, 5, TimeUnit.SECONDS));
+                    assertTrue("Did not receive our first message", fch.await(5, TimeUnit.SECONDS));
 
                 } catch (Exception e) {
                     e.printStackTrace();
                     fail("Expected successful subscribe, but got: " + e.getMessage());
                 }
 
-                final Channel<Boolean> ch = new Channel<Boolean>();
-                final Channel<Boolean> sch = new Channel<Boolean>();
+                final CountDownLatch ch = new CountDownLatch(1);
+                final CountDownLatch sch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
 
                 // Capture the messages that are delivered.
@@ -1117,7 +1167,7 @@ public class ITConnectionTest {
                         msgs.add(msg);
                         int nr = received.incrementAndGet();
                         if (nr == 10) {
-                            ch.add(true);
+                            ch.countDown();
                         } else if (nr > 10) {
                             try {
                                 msg.ack();
@@ -1126,14 +1176,14 @@ public class ITConnectionTest {
                                 // e.printStackTrace();
                             }
                             if (nr >= (toSend + 1)) { // sync Publish +1
-                                sch.add(true);
+                                sch.countDown();
                             }
                         }
                     }
                 }, new SubscriptionOptions.Builder().deliverAllAvailable().setMaxInFlight(10)
                         .setManualAcks(true).build())) {
                     assertTrue("Did not receive at least 10 messages",
-                            waitTime(ch, 5, TimeUnit.SECONDS));
+                            ch.await(5, TimeUnit.SECONDS));
 
                     // Wait a bit longer for other messages which would be an
                     // error.
@@ -1156,24 +1206,16 @@ public class ITConnectionTest {
                         }
                     }
 
-                    assertTrue("Did not receive all our messages",
-                            waitTime(sch, 5, TimeUnit.SECONDS));
+                    assertTrue("Did not receive all our messages", sch.await(5, TimeUnit.SECONDS));
                     assertEquals("Did not receive correct number of messages", toSend + 1,
                             received.get());
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    fail("Should have subscribed successfully, but got: " + e.getMessage());
                 }
-
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testRedelivery() {
+    public void testRedelivery() throws IOException, TimeoutException, InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
@@ -1196,8 +1238,8 @@ public class ITConnectionTest {
                 }
                 assertTrue("Expected an error for AckWait < 1 second", exThrown);
 
-                final Channel<Boolean> ch = new Channel<Boolean>();
-                final Channel<Boolean> sch = new Channel<Boolean>();
+                final CountDownLatch ch = new CountDownLatch(1);
+                final CountDownLatch sch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
 
                 Duration ackRedeliverTime = Duration.ofSeconds(1); // 1 second
@@ -1207,36 +1249,29 @@ public class ITConnectionTest {
                     public void onMessage(Message msg) {
                         int nr = received.incrementAndGet();
                         if (nr == toSend) {
-                            ch.add(true);
+                            ch.countDown();
                         } else if (nr == (2 * toSend)) {
-                            sch.add(true);
+                            sch.countDown();
                         }
                     }
                 }, new SubscriptionOptions.Builder().deliverAllAvailable()
                         .setMaxInFlight(toSend + 1).setAckWait(ackRedeliverTime).setManualAcks(true)
                         .build())) {
                     assertTrue("Did not receive first delivery of all messages",
-                            waitTime(ch, 5, TimeUnit.SECONDS));
+                            ch.await(5, TimeUnit.SECONDS));
                     assertEquals("Did not receive correct number of messages", toSend,
                             received.get());
                     assertTrue("Did not receive re-delivery of all messages",
-                            waitTime(sch, 5, TimeUnit.SECONDS));
+                            sch.await(5, TimeUnit.SECONDS));
                     assertEquals("Did not receive correct number of messages", toSend * 2,
                             received.get());
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    fail("Should have subscribed successfully, but got: " + e.getMessage());
                 }
-
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testDurableSubscriber() throws IOException, TimeoutException {
+    public void testDurableSubscriber() throws IOException, TimeoutException, InterruptedException {
         try (STANServer s = runServer(clusterName)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             final Connection sc = cf.createConnection();
@@ -1252,8 +1287,7 @@ public class ITConnectionTest {
                 sc.publish("foo", hw);
             }
 
-            final Channel<Boolean> ch = new Channel<Boolean>();
-
+            final CountDownLatch latch = new CountDownLatch(1);
             final AtomicInteger received = new AtomicInteger(0);
 
             try {
@@ -1269,7 +1303,7 @@ public class ITConnectionTest {
                             } catch (Exception e) {
                                 e.printStackTrace(); // NOOP
                             }
-                            ch.add(true);
+                            latch.countDown();
                         } else {
                             msgsGuard.lock();
                             msgs.add(msg);
@@ -1280,15 +1314,14 @@ public class ITConnectionTest {
                         .setDurableName("durable-foo").build());
 
                 assertTrue("Did not receive first delivery of all messages",
-                        waitTime(ch, 5, TimeUnit.SECONDS));
+                        latch.await(5, TimeUnit.SECONDS));
 
                 assertEquals(
                         String.format("Expected to get only 10 messages, got %d", received.get()),
                         10, received.get());
 
                 // reset in case we get more messages in the above callback
-                final Channel<Boolean> ch2 = new Channel<Boolean>();
-
+                final CountDownLatch latch2 = new CountDownLatch(1);
 
                 // This is auto-ack, so undo received for check.
                 // Close will prevent ack from going out, so #10 will be
@@ -1309,7 +1342,7 @@ public class ITConnectionTest {
                             msgsGuard.unlock();
                             received.incrementAndGet();
                             if (received.get() == toSend) {
-                                ch2.add(true);
+                                latch2.countDown();
                             }
                         }
                     }, new SubscriptionOptions.Builder().deliverAllAvailable()
@@ -1343,7 +1376,7 @@ public class ITConnectionTest {
 
                 assertTrue(String.format(
                         "Did not receive delivery of all messages, got %d, expected %d",
-                        received.get(), toSend), waitTime(ch2, 5, TimeUnit.SECONDS));
+                        received.get(), toSend), latch2.await(5, TimeUnit.SECONDS));
                 assertEquals("Didn't receive all messages", toSend, received.get());
                 assertEquals("Didn't save all messages", toSend, msgs.size());
                 // Check we received them in order
@@ -1368,11 +1401,11 @@ public class ITConnectionTest {
     }
 
     @Test
-    public void testPubMultiQueueSub() {
+    public void testPubMultiQueueSub() throws InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final AtomicInteger s1Received = new AtomicInteger(0);
                 final AtomicInteger s2Received = new AtomicInteger(0);
@@ -1396,7 +1429,7 @@ public class ITConnectionTest {
                         }
                         // Track total
                         if (received.incrementAndGet() == toSend) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 };
@@ -1412,7 +1445,7 @@ public class ITConnectionTest {
                         }
 
                         assertTrue("Did not receive all our messages",
-                                waitTime(ch, 5, TimeUnit.SECONDS));
+                                latch.await(5, TimeUnit.SECONDS));
                         assertEquals("Did not receive correct number of messages", toSend,
                                 received.get());
                         double var = ((float) toSend * 0.25);
@@ -1439,12 +1472,13 @@ public class ITConnectionTest {
      * 
      */
     @Test
-    public void testPubMultiQueueSubWithSlowSubscriberAndFlapping() {
+    public void testPubMultiQueueSubWithSlowSubscriberAndFlapping()
+            throws InterruptedException, IOException, TimeoutException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final Subscription[] subs = new Subscription[2];
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final AtomicInteger s1Received = new AtomicInteger(0);
                 final AtomicInteger s2Received = new AtomicInteger(0);
@@ -1474,7 +1508,7 @@ public class ITConnectionTest {
                         // Track total
                         int nr = received.incrementAndGet();
                         if (nr == toSend) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 };
@@ -1491,7 +1525,7 @@ public class ITConnectionTest {
                         }
 
                         assertTrue("Did not receive all our messages",
-                                waitTime(ch, 10, TimeUnit.SECONDS));
+                                latch.await(10, TimeUnit.SECONDS));
                         assertEquals("Did not receive correct number of messages", toSend,
                                 received.get());
 
@@ -1509,21 +1543,19 @@ public class ITConnectionTest {
                         }
                     }
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
 
     @Test
-    public void testPubMultiQueueSubWithSlowSubscriber() {
+    public void testPubMultiQueueSubWithSlowSubscriber()
+            throws IOException, TimeoutException, InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final Subscription[] subs = new Subscription[2];
-                final Channel<Boolean> ch = new Channel<Boolean>();
-                final Channel<Boolean> s2BlockedCh = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
+                final CountDownLatch s2BlockedLatch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final AtomicInteger s1Received = new AtomicInteger(0);
                 final AtomicInteger s2Received = new AtomicInteger(0);
@@ -1544,7 +1576,10 @@ public class ITConnectionTest {
                             // logger.error("Sub1[{}]: {}\n", s1Received.get(), msg);
                         } else if (msg.getSubscription().equals(subs[1])) {
                             // Block this subscriber
-                            while (!s2BlockedCh.isClosed()) {
+                            try {
+                                s2BlockedLatch.await();
+                            } catch (InterruptedException e) {
+                                logger.warn("Interrupted", e);
                             }
                             s2Received.incrementAndGet();
                             // logger.error("Sub2[{}]: {}\n", s2Received.get(), msg);
@@ -1554,7 +1589,7 @@ public class ITConnectionTest {
                         // Track total
                         int nr = received.incrementAndGet();
                         if (nr == toSend) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 };
@@ -1569,10 +1604,10 @@ public class ITConnectionTest {
                             sc.publish("foo", data);
                             // sleep(1, TimeUnit.MICROSECONDS);
                         }
-                        s2BlockedCh.close();
+                        s2BlockedLatch.countDown();
 
                         assertTrue("Did not receive all our messages",
-                                waitTime(ch, 10, TimeUnit.SECONDS));
+                                latch.await(10, TimeUnit.SECONDS));
                         assertEquals("Did not receive correct number of messages", toSend,
                                 received.get());
 
@@ -1589,9 +1624,6 @@ public class ITConnectionTest {
 
                     }
                 }
-            } catch (IOException | TimeoutException e) {
-                e.printStackTrace();
-                fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
     }
@@ -1601,7 +1633,7 @@ public class ITConnectionTest {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
                 final AtomicInteger s1Received = new AtomicInteger(0);
                 final int toSend = 500;
@@ -1621,7 +1653,7 @@ public class ITConnectionTest {
 
                             // Track total only for sub1
                             if (received.incrementAndGet() == toSend) {
-                                ch.add(true);
+                                latch.countDown();
                             }
                         } else if (msg.getSubscription().equals(subs[1])) {
                             // We will not ack this subscriber
@@ -1645,7 +1677,7 @@ public class ITConnectionTest {
                         }
 
                         assertTrue("Did not receive all our messages",
-                                waitTime(ch, 30, TimeUnit.SECONDS));
+                                latch.await(30, TimeUnit.SECONDS));
                         assertEquals("Did not receive correct number of messages:", toSend,
                                 received.get());
 
@@ -1672,7 +1704,7 @@ public class ITConnectionTest {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger ackCount = new AtomicInteger(0);
                 final int toSend = 500;
                 final Subscription[] subs = new Subscription[2];
@@ -1690,7 +1722,7 @@ public class ITConnectionTest {
                             int nr = ackCount.incrementAndGet();
 
                             if (nr == toSend) {
-                                ch.add(true);
+                                latch.countDown();
                             }
 
                             if (nr > 0 && nr % (toSend / 2) == 0) {
@@ -1724,7 +1756,7 @@ public class ITConnectionTest {
                         }
 
                         assertTrue("Did not ack expected count of messages",
-                                waitTime(ch, 30, TimeUnit.SECONDS));
+                                latch.await(30, TimeUnit.SECONDS));
                         assertEquals("Did not ack correct number of messages", toSend,
                                 ackCount.get());
                     } catch (Exception e) {
@@ -1740,11 +1772,10 @@ public class ITConnectionTest {
                 fail("Expected to connect correctly, got err [" + e.getMessage() + "]");
             }
         }
-        System.err.println("Stan server is shut down");
     }
 
     @Test
-    public void testRedeliveredFlag() {
+    public void testRedeliveredFlag() throws InterruptedException {
         try (STANServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
@@ -1761,7 +1792,7 @@ public class ITConnectionTest {
                     }
                 }
 
-                final Channel<Boolean> ch = new Channel<Boolean>();
+                final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
 
                 // Capture the messages that are delivered.
@@ -1781,20 +1812,18 @@ public class ITConnectionTest {
                             }
                         }
                         if (received.incrementAndGet() == toSend) {
-                            ch.add(true);
+                            latch.countDown();
                         }
                     }
                 };
 
                 // Now subscribe and set start position to #6, so should
                 // received 6-10.
-                try (Subscription sub =
-                        sc.subscribe("foo", mcb,
-                                new SubscriptionOptions.Builder().deliverAllAvailable()
-                                        .setAckWait(1, TimeUnit.SECONDS).setManualAcks(true)
-                                        .build())) {
+                try (Subscription sub = sc.subscribe("foo", mcb,
+                        new SubscriptionOptions.Builder().deliverAllAvailable()
+                                .setAckWait(1, TimeUnit.SECONDS).setManualAcks(true).build())) {
                     assertTrue("Did not receive at least 10 messages",
-                            waitTime(ch, 5, TimeUnit.SECONDS));
+                            latch.await(5, TimeUnit.SECONDS));
 
                     sleep(1500, TimeUnit.MILLISECONDS); // Wait for redelivery
                     Iterator<Message> it = msgs.values().iterator();

@@ -16,7 +16,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.nats.client.AsyncSubscription;
-import io.nats.client.Channel;
 import io.nats.client.NUID;
 import io.nats.stan.protobuf.CloseResponse;
 import io.nats.stan.protobuf.ConnectResponse;
@@ -37,6 +36,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -50,15 +50,11 @@ class UnitTestUtilities {
     static final String testClusterName = "my_test_cluster";
     static final String testClientName = "me";
 
-    static Connection newDefaultConnection(Logger log) {
+    static Connection newDefaultConnection() throws IOException, TimeoutException {
         io.nats.client.ConnectionFactory ncf = new io.nats.client.ConnectionFactory();
         io.nats.client.Connection nc = null;
         ncf.setReconnectAllowed(false);
-        try {
-            nc = ncf.createConnection();
-        } catch (IOException | TimeoutException e) {
-            log.error("Failed to create NATS connection", e);
-        }
+        nc = ncf.createConnection();
 
         ConnectionFactory scf = new ConnectionFactory();
         scf.setNatsConnection(nc);
@@ -66,11 +62,7 @@ class UnitTestUtilities {
         scf.setClusterId(testClusterName);
 
         Connection sc = null;
-        try {
-            sc = scf.createConnection();
-        } catch (IOException | TimeoutException e) {
-            log.error("Failed to create STAN connection", e);
-        }
+        sc = scf.createConnection();
         return sc;
     }
 
@@ -372,31 +364,45 @@ class UnitTestUtilities {
         }
     }
 
-    static boolean wait(Channel<Boolean> ch) {
-        return waitTime(ch, 5, TimeUnit.SECONDS);
+    static boolean await(CountDownLatch latch) {
+        return await(latch, 5, TimeUnit.SECONDS);
     }
 
-    static boolean waitTime(Channel<Boolean> ch, long timeout, TimeUnit unit) {
+    static boolean await(CountDownLatch latch, long timeout, TimeUnit unit) {
         boolean val = false;
         try {
-            val = ch.get(timeout, unit);
-        } catch (TimeoutException e) {
-            e.printStackTrace();
+            val = latch.await(timeout, unit);
+        } catch (InterruptedException e) {
+            /* NOOP */
         }
         return val;
     }
 
-    static STANServer runServer(String clusterID) {
-        return runServer(clusterID, false);
+    static STANServer runDefaultServer() {
+        return runServer(testClusterName, false);
     }
 
-    static STANServer runServer(String clusterID, boolean debug) {
-        STANServer srv = new STANServer(clusterID, debug);
+    static STANServer runDefaultServer(boolean debug) {
+        return runServer(testClusterName, debug);
+    }
+
+    static STANServer runServer(String clusterId) {
+        return runServer(clusterId, false);
+    }
+
+    static STANServer runServer(String clusterId, boolean debug) {
+        STANServer srv = new STANServer(clusterId, debug);
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
         return srv;
+    }
+
+    static synchronized void setLogLevel(ch.qos.logback.classic.Level level) {
+        ch.qos.logback.classic.Logger lbLog =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("io.nats.stan");
+        lbLog.setLevel(level);
     }
 }

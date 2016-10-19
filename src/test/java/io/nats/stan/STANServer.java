@@ -8,6 +8,7 @@ package io.nats.stan;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -94,21 +95,9 @@ class STANServer implements Runnable, AutoCloseable {
         start();
     }
 
-    // private String buildConfigFileName(String configFile) {
-    // return new String("../src/test/resources/" + configFile);
-    // }
-
-    // public STANServer(String configFile, boolean debug)
-    // {
-    // this.debug = debug;
-    // psInfo = this.createProcessStartInfo();
-    // psInfo.addArgument("-config " + buildConfigFileName(configFile));
-    // start();
-    // }
     private ProcessStartInfo createProcessStartInfo() {
-        File target = new File("target" + "/" + STAN_SERVER);
-        String execName = target.getAbsolutePath();
-        psInfo = new ProcessStartInfo(execName);
+        String execPath = Paths.get("target", "/", STAN_SERVER).toAbsolutePath().toString();
+        psInfo = new ProcessStartInfo(execPath);
 
         if (debug) {
             psInfo.addArgument("-DV");

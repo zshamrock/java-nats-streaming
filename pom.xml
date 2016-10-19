@@ -8,7 +8,7 @@
     <parent>
         <groupId>io.nats</groupId>
         <artifactId>nats-parent</artifactId>
-        <version>1.4</version>
+        <version>1.6</version>
     </parent>
 
     <groupId>io.nats</groupId>
@@ -64,7 +64,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
 
         <!-- project-specific plugin versions -->
-        <jnats-version>0.5.3</jnats-version>
+        <jnats-version>0.7.0-SNAPSHOT</jnats-version>
 
         <!-- Used for downloading and installing a server binary for tests -->
         <server.version>0.2.2</server.version>
@@ -387,11 +387,6 @@
                     <coverageFile>${jacoco.ut.execution.data.file}</coverageFile>
                     <sourceEncoding>${project.reporting.sourceEncoding}</sourceEncoding>
                 </configuration>
-                <!-- <executions> <execution> <id>travis-after-success</id> 
-                    <goals> <goal>report</goal> </goals> <configuration> <jacocoFile>${jacoco.ut.execution.data.file}</jacocoFile> 
-                    <jacocoReports>${jacoco.ut.execution.data.file}</jacocoReports> <coverageFile>${jacoco.ut.execution.data.file}</coverageFile> 
-                    <sourceEncoding>${project.reporting.sourceEncoding}</sourceEncoding> </configuration> 
-                    </execution> </executions> -->
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
