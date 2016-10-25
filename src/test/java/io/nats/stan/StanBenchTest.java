@@ -43,10 +43,10 @@ public class StanBenchTest {
     @After
     public void tearDown() throws Exception {}
 
-    @Test
-    public void testStanBenchStringArray() {
-        fail("Not yet implemented"); // TODO
-    }
+    // @Test
+    // public void testStanBenchStringArray() {
+    // fail("Not yet implemented"); // TODO
+    // }
 
     @Test
     public void testStanBenchProperties() {
@@ -57,7 +57,7 @@ public class StanBenchTest {
             props.setProperty("bench.stan.cluster.id", "my_test_cluster");
             props.setProperty("bench.stan.client.id", client);
             props.setProperty("bench.stan.secure", "false");
-            props.setProperty("bench.stan.msg.count", "100000");
+            props.setProperty("bench.stan.msg.count", "10000");
             props.setProperty("bench.stan.msg.size", "0");
             props.setProperty("bench.stan.secure", "false");
             props.setProperty("bench.stan.pubs", "1");
@@ -76,24 +76,23 @@ public class StanBenchTest {
         }
     }
 
-    @Test
-    public void testRun() {
-        fail("Not yet implemented"); // TODO
-    }
-
-    @Test
-    public void testInstallShutdownHook() {
-        fail("Not yet implemented"); // TODO
-    }
-
-    @Test
-    public void testUsage() {
-        fail("Not yet implemented"); // TODO
-    }
-
-    @Test
-    public void testMain() {
-        fail("Not yet implemented"); // TODO
-    }
-
+    // @Test
+    // public void testRun() {
+    // fail("Not yet implemented"); // TODO
+    // }
+    //
+    // @Test
+    // public void testInstallShutdownHook() {
+    // fail("Not yet implemented"); // TODO
+    // }
+    //
+    // @Test
+    // public void testUsage() {
+    // fail("Not yet implemented"); // TODO
+    // }
+    //
+    // @Test
+    // public void testMain() {
+    // fail("Not yet implemented"); // TODO
+    // }
 }
