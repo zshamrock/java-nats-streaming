@@ -42,8 +42,8 @@ public class Subscriber {
             + "         --seq    <seqno>            Start at seqno\n"
             + "         --all                       Deliver all available messages\n"
             + "         --last                      Deliver starting with last published message\n"
-            + "         --since  <duration>         Deliver messages in last interval (e.g. 1s, 1hr)\n"
-            + "                   (format: 00d00h00m00s00ns)\n"
+            + "         --since  <duration>         Deliver messages in last interval "
+            + "(e.g. 1s, 1hr)\n" + "                   (format: 00d00h00m00s00ns)\n"
             + "         --durable <name>            Durable subscriber name";
 
     Subscriber(String[] args) {

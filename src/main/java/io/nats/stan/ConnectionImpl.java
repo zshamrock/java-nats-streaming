@@ -35,11 +35,13 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
@@ -80,7 +82,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     static final Logger logger = LoggerFactory.getLogger(ConnectionImpl.class);
 
-    final Lock mu = new ReentrantLock();
+    final ReadWriteLock mu = new ReentrantReadWriteLock();
 
     String clientId;
     String clusterId;
@@ -103,6 +105,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     Timer ackTimer = new Timer(true);
 
     boolean ncOwned = false;
+
+    ExecutorService exec = Executors.newCachedThreadPool();
 
     protected ConnectionImpl() {
 
@@ -151,7 +155,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         String discoverSubject = String.format("%s.%s", opts.getDiscoverPrefix(), clusterId);
         ConnectRequest req = ConnectRequest.newBuilder().setClientID(clientId)
                 .setHeartbeatInbox(hbInbox).build();
-        logger.trace("Sending ConnectRequest:\n{}", req.toString().trim());
+        // logger.trace("Sending ConnectRequest:\n{}", req.toString().trim());
         byte[] bytes = req.toByteArray();
         Message reply = null;
         try {
@@ -291,13 +295,19 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     }
 
     protected void processHeartBeat(Message msg) {
-        // No payload assumed, just reply
-        try {
-            nc.publish(msg.getReplyTo(), null);
-            logger.debug("Sent heartbeat response");
-        } catch (IOException e) {
-            logger.warn("stan: error publishing heartbeat response: {}", e.getMessage());
-            logger.debug("Full stack trace:", e);
+        // No payload assumed, just reply.
+        io.nats.client.Connection nc;
+        this.rLock();
+        nc = this.nc;
+        this.rUnlock();
+        if (nc != null) {
+            try {
+                nc.publish(msg.getReplyTo(), null);
+                logger.debug("Sent heartbeat response");
+            } catch (IOException e) {
+                logger.warn("stan: error publishing heartbeat response: {}", e.getMessage());
+                logger.debug("Full stack trace:", e);
+            }
         }
     }
 
@@ -309,16 +319,10 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     @Override
     public void publish(String subject, byte[] data) throws IOException {
         final BlockingQueue<String> ch = createErrorChannel();
-        // Instant t0 = Instant.now();
         publish(subject, data, null, ch);
-        // Instant t1 = Instant.now();
         String err = null;
         try {
             err = ch.take();
-            // Instant t2 = Instant.now();
-            // logger.info("publish took {}ns, ch.take() took {}ns, total r/t took {}ns",
-            // Duration.between(t0, t1).toNanos(), Duration.between(t1, t2).toNanos(),
-            // Duration.between(t0, t2).toNanos());
             if (!err.isEmpty()) {
                 throw new IOException(err);
             }
@@ -356,7 +360,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 throw new IllegalStateException(ERR_CONNECTION_CLOSED);
             }
 
-            subj = String.format("%s.%s", pubPrefix, subject);
+            subj = pubPrefix + "." + subject;
             guid = NUID.nextGlobal();
             PubMsg.Builder pb =
                     PubMsg.newBuilder().setClientID(clientId).setGuid(guid).setSubject(subject);
@@ -381,11 +385,12 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             pac.put(PubAck.getDefaultInstance());
         } catch (InterruptedException e) {
             logger.warn("Publish operation interrupted", e);
-            Thread.currentThread().interrupt();
+            // Eat this because you can't really do anything with it
+            // Thread.currentThread().interrupt();
         }
 
         try {
-            nc.publish(subj, ackSubject, bytes);
+            nc.publish(subj, ackSubject, bytes, true);
         } catch (IOException e) {
             removeAck(guid);
             throw (e);
@@ -425,14 +430,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     @Override
     public Subscription subscribe(String subject, String queue, io.nats.stan.MessageHandler cb,
             SubscriptionOptions opts) throws IOException, TimeoutException {
-        // return _subscribe(subject, queue, cb, opts);
-        // }
-        //
-        // Subscription _subscribe(String subject, String qgroup, io.nats.stan.MessageHandler cb,
-        // SubscriptionOptions opts) throws IOException, TimeoutException {
         SubscriptionImpl sub = null;
-        // logger.trace("In _subscribe for subject {}, qgroup {}", subject,
-        // qgroup);
+        io.nats.client.Connection nc = null;
         this.lock();
         try {
             if (getNatsConnection() == null) {
@@ -443,7 +442,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
             // Register subscription.
             subMap.put(sub.inbox, sub);
-            io.nats.client.Connection nc = getNatsConnection();
+            nc = getNatsConnection();
         } finally {
             this.unlock();
         }
@@ -461,7 +460,7 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
             Message reply = null;
             try {
-                logger.trace("Sending SubscriptionRequest:\n{}", sr);
+                // logger.trace("Sending SubscriptionRequest:\n{}", sr);
                 reply = nc.request(subRequests, sr.toByteArray(), 2L, TimeUnit.SECONDS);
             } catch (TimeoutException e) {
                 throw new TimeoutException(ConnectionImpl.ERR_TIMEOUT);
@@ -471,10 +470,13 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
             try {
                 response = SubscriptionResponse.parseFrom(reply.getData());
             } catch (InvalidProtocolBufferException e) {
+                sub.inboxSub.unsubscribe();
+                sub.inboxSub = null;
                 throw e;
             }
-            logger.trace("Received SubscriptionResponse:\n{}", response);
+            // logger.trace("Received SubscriptionResponse:\n{}", response);
             if (!response.getError().isEmpty()) {
+                sub.inboxSub.unsubscribe();
                 throw new IOException(response.getError());
             }
             sub.setAckInbox(response.getAckInbox());
@@ -553,7 +555,6 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                     ackClosure.ch.put(ackError);
                 } catch (InterruptedException e) {
                     logger.debug("stan: processAck interrupted");
-                    Thread.currentThread().interrupt();
                 }
             }
         }
@@ -573,10 +574,8 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
         if (ackClosure.ah != null) {
             ackClosure.ah.onAck(guid, new TimeoutException(ERR_TIMEOUT));
         } else if (ackClosure.ch != null) {
-            try {
-                ackClosure.ch.put(ERR_TIMEOUT);
-            } catch (InterruptedException e) {
-                logger.warn("stan: processAckTimeout interrupted");
+            if (!ackClosure.ch.offer(ERR_TIMEOUT)) {
+                logger.warn("stan: processAckTimeout unable to write timeout error to ack channel");
             }
         }
     }
@@ -722,11 +721,19 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     }
 
     protected void lock() {
-        mu.lock();
+        mu.writeLock().lock();
     }
 
     protected void unlock() {
-        mu.unlock();
+        mu.writeLock().unlock();
+    }
+
+    protected void rLock() {
+        mu.writeLock().lock();
+    }
+
+    protected void rUnlock() {
+        mu.writeLock().unlock();
     }
 
     protected io.nats.client.Subscription getAckSubscription() {

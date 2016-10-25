@@ -145,14 +145,14 @@ class SubscriptionImpl implements Subscription {
 
         io.nats.client.Message reply = null;
         try {
-            logger.trace("Sending UnsubscribeRequest:\n{}", usr);
+            // logger.trace("Sending UnsubscribeRequest:\n{}", usr);
             // FIXME(dlc) - make timeout configurable.
             reply = sc.nc.request(reqSubject, bytes, 2, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             throw new TimeoutException(ConnectionImpl.ERR_TIMEOUT);
         }
         SubscriptionResponse response = SubscriptionResponse.parseFrom(reply.getData());
-        logger.trace("Received Unsubscribe SubscriptionResponse:\n{}", response);
+        // logger.trace("Received Unsubscribe SubscriptionResponse:\n{}", response);
         if (!response.getError().isEmpty()) {
             throw new IOException("stan: " + response.getError());
         }

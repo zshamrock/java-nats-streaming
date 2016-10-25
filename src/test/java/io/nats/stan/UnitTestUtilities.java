@@ -44,7 +44,7 @@ class UnitTestUtilities {
     static final Logger logger = LoggerFactory.getLogger(UnitTestUtilities.class);
 
     // final Object mu = new Object();
-    static STANServer defaultServer = null;
+    static StanServer defaultServer = null;
     Process authServerProcess = null;
 
     static final String testClusterName = "my_test_cluster";
@@ -185,7 +185,6 @@ class UnitTestUtilities {
         doAnswer(new Answer<Void>() {
             @Override
             public Void answer(InvocationOnMock invocation) throws Throwable {
-                // when(br.readLine()).thenReturn("PONG");
                 Object[] args = invocation.getArguments();
                 // String pubSubject = (String) args[0];
                 String localAckSubject = (String) args[1];
@@ -201,7 +200,8 @@ class UnitTestUtilities {
                 return null;
             }
         }).when(nc).publish(any(String.class),
-                matches("^" + ConnectionImpl.DEFAULT_ACK_PREFIX + "\\..*$"), any(byte[].class));
+                matches("^" + ConnectionImpl.DEFAULT_ACK_PREFIX + "\\..*$"), any(byte[].class),
+                any(boolean.class));
         // }).when(nc).publish(any(String.class), eq(ackSubject[0]), any(byte[].class));
 
         return nc;
@@ -214,7 +214,7 @@ class UnitTestUtilities {
 
     static synchronized void startDefaultServer(boolean debug) {
         if (defaultServer == null) {
-            defaultServer = new STANServer(debug);
+            defaultServer = new StanServer(debug);
             try {
                 Thread.sleep(500);
             } catch (InterruptedException e) {
@@ -244,12 +244,12 @@ class UnitTestUtilities {
         authServerProcess = Runtime.getRuntime().exec("gnatsd -config auth.conf");
     }
 
-    STANServer createServerOnPort(int port) {
+    StanServer createServerOnPort(int port) {
         return createServerOnPort(port, false);
     }
 
-    STANServer createServerOnPort(int port, boolean debug) {
-        STANServer nsrv = new STANServer(port, debug);
+    StanServer createServerOnPort(int port, boolean debug) {
+        StanServer nsrv = new StanServer(port, debug);
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {
@@ -258,12 +258,12 @@ class UnitTestUtilities {
         return nsrv;
     }
 
-    STANServer createServerWithConfig(String configFile) {
+    StanServer createServerWithConfig(String configFile) {
         return createServerWithConfig(configFile, false);
     }
 
-    STANServer createServerWithConfig(String configFile, boolean debug) {
-        STANServer nsrv = new STANServer(configFile, debug);
+    StanServer createServerWithConfig(String configFile, boolean debug) {
+        StanServer nsrv = new StanServer(configFile, debug);
         sleep(500);
         return nsrv;
     }
@@ -378,20 +378,20 @@ class UnitTestUtilities {
         return val;
     }
 
-    static STANServer runDefaultServer() {
+    static StanServer runDefaultServer() {
         return runServer(testClusterName, false);
     }
 
-    static STANServer runDefaultServer(boolean debug) {
+    static StanServer runDefaultServer(boolean debug) {
         return runServer(testClusterName, debug);
     }
 
-    static STANServer runServer(String clusterId) {
+    static StanServer runServer(String clusterId) {
         return runServer(clusterId, false);
     }
 
-    static STANServer runServer(String clusterId, boolean debug) {
-        STANServer srv = new STANServer(clusterId, debug);
+    static StanServer runServer(String clusterId, boolean debug) {
+        StanServer srv = new StanServer(clusterId, debug);
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {
