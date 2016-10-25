@@ -68,6 +68,7 @@ import java.util.TimerTask;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -555,7 +556,7 @@ public class ConnectionImplTest {
         try (ConnectionImpl conn = (ConnectionImpl) newMockedConnection()) {
             conn.publish(subj, payload);
             verify(conn.nc).publish(matches(conn.pubPrefix + "." + subj), eq(conn.ackSubject),
-                    any(byte[].class));
+                    any(byte[].class), any(boolean.class));
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
@@ -569,7 +570,8 @@ public class ConnectionImplTest {
         byte[] payload = "Hello World".getBytes();
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
             @SuppressWarnings("unchecked")
-            BlockingQueue<String> mockCh = (BlockingQueue<String>) mock(BlockingQueue.class);
+            SynchronousQueue<String> mockCh =
+                    (SynchronousQueue<String>) mock(SynchronousQueue.class);
             when(mockCh.size()).thenReturn(1);
             when(mockCh.take()).thenReturn("test exception");
             when(conn.createErrorChannel()).thenReturn(mockCh);
@@ -596,7 +598,7 @@ public class ConnectionImplTest {
             // test for interrupted channel add
             io.nats.client.Connection nc = mock(io.nats.client.Connection.class);
             doThrow(new IOException("Test exception")).when(nc).publish(any(String.class),
-                    any(String.class), any(byte[].class));
+                    any(String.class), any(byte[].class), any(boolean.class));
             io.nats.client.Connection origNatsConn = conn.nc;
 
             // Set connection to mock in order to trigger exception

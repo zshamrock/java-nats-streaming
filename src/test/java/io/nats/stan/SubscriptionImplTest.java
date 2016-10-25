@@ -75,11 +75,6 @@ public class SubscriptionImplTest {
         }
     }
 
-    /**
-     * Test method for
-     * {@link io.nats.stan.SubscriptionImpl#SubscriptionImpl (java.lang.String, java.lang.String, io.nats.stan.MessageHandler, io.nats.stan.ConnectionImpl, io.nats.stan.SubscriptionOptions)}
-     *
-     */
     @Test
     public void testSubscriptionImplStringStringMessageHandlerConnectionImplSubscriptionOptions() {
         ConnectionImpl conn = null;

@@ -14,6 +14,7 @@ import io.nats.client.ConnectionEvent;
 import io.nats.client.DisconnectedCallback;
 import io.nats.client.ExceptionHandler;
 import io.nats.client.NATSException;
+import io.nats.client.NUID;
 import io.nats.stan.AckHandler;
 import io.nats.stan.Connection;
 import io.nats.stan.ConnectionFactory;
@@ -25,7 +26,9 @@ import io.nats.stan.SubscriptionOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -74,7 +78,8 @@ public class StanBench {
     private Benchmark bench;
 
     static final String usageString =
-            "\nUsage: nats-bench [-s server] [--tls] [-id clientid] [-np #pubs] [-ns #subs] [-n #msg] [-mpa #pubacks] [-ms size] "
+            "\nUsage: nats-bench [-s server] [--tls] [-id clientid] [-np #pubs] [-ns #subs] "
+                    + "[-n #msg] [-mpa #pubacks] [-ms size] "
                     + "[-io] [-a] [-csv file] <subject>\n\nOptions:\n"
                     + "    -s   <urls>                     NATS server URLs (separated by comma)\n"
                     + "    -tls                            Use TLS secure connection\n"
@@ -100,11 +105,35 @@ public class StanBench {
             return;
         }
         parseArgs(args);
-        natsConnFactory = new io.nats.client.ConnectionFactory(urls);
-        natsConnFactory.setSecure(secure);
-        natsConnFactory.setReconnectAllowed(false);
+    }
 
-        bench = new Benchmark("NATS Streaming", numSubs, numPubs);
+    /**
+     * Properties-based constructor for StanBench.
+     * 
+     * @param properties configuration properties
+     */
+    public StanBench(Properties properties) {
+        urls = properties.getProperty("bench.stan.servers", urls);
+        clientId = properties.getProperty("bench.stan.client.id", clientId);
+        clusterId = properties.getProperty("bench.stan.cluster.id", clusterId);
+        secure = Boolean.parseBoolean(
+                properties.getProperty("bench.stan.secure", Boolean.toString(secure)));
+        numMsgs = Integer.parseInt(
+                properties.getProperty("bench.stan.msg.count", Integer.toString(numMsgs)));
+        maxPubAcksInFlight = Integer.parseInt(properties.getProperty("bench.stan.pub.maxpubacks",
+                Integer.toString(maxPubAcksInFlight)));
+        size = Integer
+                .parseInt(properties.getProperty("bench.stan.msg.size", Integer.toString(numSubs)));
+        numPubs = Integer
+                .parseInt(properties.getProperty("bench.stan.pubs", Integer.toString(numPubs)));
+        numSubs = Integer
+                .parseInt(properties.getProperty("bench.stan.subs", Integer.toString(numSubs)));
+        csvFileName = properties.getProperty("bench.stan.csv.filename", null);
+        subject = properties.getProperty("bench.stan.subject", NUID.nextGlobal());
+        async = Boolean.parseBoolean(
+                properties.getProperty("bench.stan.pub.async", Boolean.toString(async)));
+        ignoreOld = Boolean.parseBoolean(
+                properties.getProperty("bench.stan.sub.ignoreold", Boolean.toString(ignoreOld)));
     }
 
     class Worker implements Runnable {
@@ -188,6 +217,7 @@ public class StanBench {
                     received.incrementAndGet();
                     if (received.get() >= numMsgs) {
                         bench.addSubSample(new Sample(numMsgs, size, start, System.nanoTime(), nc));
+                        log.info("Subscriber connection stats: " + nc.getStats());
                         phaser.arrive();
                         nc.setDisconnectedCallback(null);
                         nc.setClosedCallback(null);
@@ -236,11 +266,11 @@ public class StanBench {
             if (maxPubAcksInFlight > 0) {
                 cf.setMaxPubAcksInFlight(maxPubAcks);
             }
-
             final io.nats.client.Connection nc = natsConnFactory.createConnection();
             cf.setNatsConnection(nc);
 
             try (Connection sc = cf.createConnection()) {
+
                 byte[] msg = null;
                 if (size > 0) {
                     msg = new byte[size];
@@ -277,6 +307,7 @@ public class StanBench {
                 }
 
                 bench.addPubSample(new Sample(numMsgs, size, start, System.nanoTime(), nc));
+                log.info("Publisher connection stats: \n{}", nc.getStats());
             } // Connection
         }
     }
@@ -293,6 +324,12 @@ public class StanBench {
         installShutdownHook();
 
         phaser.register();
+
+        natsConnFactory = new io.nats.client.ConnectionFactory(urls);
+        natsConnFactory.setSecure(secure);
+        natsConnFactory.setReconnectAllowed(false);
+
+        bench = new Benchmark("NATS Streaming", numSubs, numPubs);
 
         // Run Subscribers first
         for (int i = 0; i < numSubs; i++) {
@@ -350,10 +387,6 @@ public class StanBench {
     void usage() {
         System.err.println(usageString);
         System.exit(-1);
-    }
-
-    long backlog() {
-        return published.get() - received.get();
     }
 
     private void parseArgs(String[] args) {
@@ -457,6 +490,17 @@ public class StanBench {
         }
     }
 
+    private static Properties loadProperties(String configPath) {
+        try {
+            InputStream is = new FileInputStream(configPath);
+            Properties prop = new Properties();
+            prop.load(is);
+            return prop;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /**
      * The main program executive.
      * 
@@ -464,9 +508,13 @@ public class StanBench {
      */
     public static void main(String[] args) {
         try {
-            new StanBench(args).run();
+            if (args.length == 1 && args[0].endsWith(".properties")) {
+                Properties properties = loadProperties(args[0]);
+                new StanBench(properties).run();
+            } else {
+                new StanBench(args).run();
+            }
         } catch (Exception e) {
-
             e.printStackTrace();
             System.exit(-1);
         }

@@ -34,7 +34,9 @@ public class SubscriptionOptionsTest {
     public TestCasePrinterRule pr = new TestCasePrinterRule(System.out);
 
     /**
-     * @throws java.lang.Exception
+     * Setup for all cases in this test.
+     * 
+     * @throws Exception if something goes wrong
      */
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
@@ -43,21 +45,12 @@ public class SubscriptionOptionsTest {
                 .startAtSequence(12345).build();
     }
 
-    /**
-     * @throws java.lang.Exception
-     */
     @AfterClass
     public static void tearDownAfterClass() throws Exception {}
 
-    /**
-     * @throws java.lang.Exception
-     */
     @Before
     public void setUp() throws Exception {}
 
-    /**
-     * @throws java.lang.Exception
-     */
     @After
     public void tearDown() throws Exception {}
 

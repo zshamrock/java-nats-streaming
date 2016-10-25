@@ -104,7 +104,7 @@ public class MessageTest {
         assertArrayEquals(data, msg.getData());
         assertEquals(sequence, msg.getSequence());
         assertEquals(redelivered, msg.isRedelivered());
-        assertEquals(crc32, msg.getCRC32());
+        assertEquals(crc32, msg.getCrc32());
         msg.getInstant();
         logger.info("msg={}", msg);
     }

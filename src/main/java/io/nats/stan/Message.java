@@ -187,7 +187,7 @@ public class Message {
      * 
      * @return the CRC32 checksum
      */
-    public int getCRC32() {
+    public int getCrc32() {
         return crc32;
     }
 

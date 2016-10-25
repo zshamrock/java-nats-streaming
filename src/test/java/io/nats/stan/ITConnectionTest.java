@@ -96,7 +96,7 @@ public class ITConnectionTest {
 
     @Test
     public void testUnreachable() {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             boolean exThrown = false;
 
             // Non-existent or unreachable
@@ -121,7 +121,7 @@ public class ITConnectionTest {
 
     // @Test
     // public void testConnClosedOnConnectFailure() throws IOException, TimeoutException {
-    // try (STANServer s = runDefaultServer()) {
+    // try (StanServer s = runDefaultServer()) {
     // try (Connection sc = newDefaultConnection()) {
     // // Non-Existent or Unreachable
     // int connectTime = 25;
@@ -132,7 +132,7 @@ public class ITConnectionTest {
 
     @Test
     public void testBasicConnect() {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 sleep(100, TimeUnit.MILLISECONDS);
@@ -146,7 +146,7 @@ public class ITConnectionTest {
     @Test
     public void testBasicPublish() {
         // Run a STAN server
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             try (Connection sc =
                     new ConnectionFactory(clusterName, clientName).createConnection()) {
                 sc.publish("foo", "Hello World!".getBytes());
@@ -162,7 +162,7 @@ public class ITConnectionTest {
         final String[] cbguid = new String[1];
         // final Lock glock = new ReentrantLock();
         // Run a STAN server
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             try (Connection sc =
                     new ConnectionFactory(clusterName, clientName).createConnection()) {
                 AckHandler acb = new AckHandler() {
@@ -187,7 +187,7 @@ public class ITConnectionTest {
         final String[] guid = new String[1];
         final Lock glock = new ReentrantLock();
         // Run a STAN server
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             cf.setAckTimeout(Duration.ofMillis(50));
 
@@ -232,7 +232,7 @@ public class ITConnectionTest {
     @Test
     public void testBasicSubscription() {
         // Run a STAN server
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 SubscriptionOptions sopts = new SubscriptionOptions.Builder().build();
@@ -254,7 +254,7 @@ public class ITConnectionTest {
     public void testBasicQueueSubscription()
             throws IOException, TimeoutException, InterruptedException {
         // Run a STAN server
-        try (STANServer s = runServer(clusterName)) {
+        try (StanServer s = runServer(clusterName)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final AtomicInteger count = new AtomicInteger();
@@ -311,7 +311,7 @@ public class ITConnectionTest {
         final long total = 5;
         final long firstBatch = total;
         final long secondBatch = 2 * total;
-        try (STANServer s = runServer(clusterName)) {
+        try (StanServer s = runServer(clusterName)) {
             try (Connection sc = newDefaultConnection()) {
                 for (int i = 0; i < total; i++) {
                     sc.publish("foo", "msg".getBytes());
@@ -364,7 +364,7 @@ public class ITConnectionTest {
 
     @Test
     public void testBasicPubSub() throws IOException, TimeoutException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -410,7 +410,7 @@ public class ITConnectionTest {
     @Test
     public void testBasicPubSubFlowControl()
             throws IOException, TimeoutException, InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -444,7 +444,7 @@ public class ITConnectionTest {
 
     @Test
     public void testBasicPubQueueSub() throws IOException, TimeoutException, InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -483,7 +483,7 @@ public class ITConnectionTest {
 
     // @Test
     // public void testBasicPubSubWithReply() {
-    // try (STANServer s = runServer(clusterName, false)) {
+    // try (StanServer s = runServer(clusterName, false)) {
     // ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
     // try (ConnectionImpl sc = (ConnectionImpl) cf.createConnection()) {
     // final Channel<Boolean> ch = new Channel<Boolean>();
@@ -520,7 +520,7 @@ public class ITConnectionTest {
 
     @Test
     public void testAsyncPubSub() throws IOException, TimeoutException, InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             try (ConnectionImpl sc = (ConnectionImpl) newDefaultConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
                 final byte[] hw = "Hello World".getBytes();
@@ -547,7 +547,7 @@ public class ITConnectionTest {
     @Test
     public void testSubscriptionStartPositionLast()
             throws InterruptedException, IOException, TimeoutException {
-        try (STANServer s = runServer(clusterName)) {
+        try (StanServer s = runServer(clusterName)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 int toSend = 10;
@@ -603,7 +603,7 @@ public class ITConnectionTest {
     @Test
     public void testSubscriptionStartAtSequence()
             throws InterruptedException, IOException, TimeoutException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 // Publish ten messages
@@ -667,7 +667,7 @@ public class ITConnectionTest {
     @Test
     public void testSubscriptionStartAtTime()
             throws IOException, TimeoutException, InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 // Publish first five
@@ -772,7 +772,7 @@ public class ITConnectionTest {
     @Test
     public void testSubscriptionStartAtFirst()
             throws InterruptedException, IOException, TimeoutException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 // Publish ten messages
@@ -832,7 +832,7 @@ public class ITConnectionTest {
 
     // @Test
     // public void testSubscriptionStartAtFirstOverlapping() {
-    // try (STANServer s = runServer(clusterName, false)) {
+    // try (StanServer s = runServer(clusterName, false)) {
     // ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
     // try (ConnectionImpl sc = cf.createConnection()) {
     //
@@ -924,7 +924,7 @@ public class ITConnectionTest {
 
     @Test
     public void testUnsubscribe() {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 boolean exThrown = false;
@@ -994,7 +994,7 @@ public class ITConnectionTest {
 
     @Test
     public void testSubscribeShrink() {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (final Connection sc = cf.createConnection()) {
                 int nsubs = 1000;
@@ -1032,7 +1032,7 @@ public class ITConnectionTest {
 
     @Test
     public void testDupClientId() {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             boolean exThrown = false;
             try (final Connection sc = cf.createConnection()) {
@@ -1052,7 +1052,7 @@ public class ITConnectionTest {
 
     @Test
     public void testClose() {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             Connection sc = null;
             Subscription sub = null;
@@ -1118,7 +1118,7 @@ public class ITConnectionTest {
 
     @Test
     public void testManualAck() throws IOException, TimeoutException, InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
 
@@ -1216,7 +1216,7 @@ public class ITConnectionTest {
 
     @Test
     public void testRedelivery() throws IOException, TimeoutException, InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
 
@@ -1272,7 +1272,7 @@ public class ITConnectionTest {
 
     @Test
     public void testDurableSubscriber() throws IOException, TimeoutException, InterruptedException {
-        try (STANServer s = runServer(clusterName)) {
+        try (StanServer s = runServer(clusterName)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             final Connection sc = cf.createConnection();
 
@@ -1402,7 +1402,7 @@ public class ITConnectionTest {
 
     @Test
     public void testPubMultiQueueSub() throws InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -1474,7 +1474,7 @@ public class ITConnectionTest {
     @Test
     public void testPubMultiQueueSubWithSlowSubscriberAndFlapping()
             throws InterruptedException, IOException, TimeoutException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final Subscription[] subs = new Subscription[2];
@@ -1550,7 +1550,7 @@ public class ITConnectionTest {
     @Test
     public void testPubMultiQueueSubWithSlowSubscriber()
             throws IOException, TimeoutException, InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final Subscription[] subs = new Subscription[2];
@@ -1630,7 +1630,7 @@ public class ITConnectionTest {
 
     @Test
     public void testPubMultiQueueSubWithRedelivery() {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -1701,7 +1701,7 @@ public class ITConnectionTest {
 
     @Test
     public void testPubMultiQueueSubWithDelayRedelivery() {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -1776,7 +1776,7 @@ public class ITConnectionTest {
 
     @Test
     public void testRedeliveredFlag() throws InterruptedException {
-        try (STANServer s = runServer(clusterName, false)) {
+        try (StanServer s = runServer(clusterName, false)) {
             ConnectionFactory cf = new ConnectionFactory(clusterName, clientName);
             try (Connection sc = cf.createConnection()) {
 

@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-class STANServer implements Runnable, AutoCloseable {
+class StanServer implements Runnable, AutoCloseable {
     static final String STAN_SERVER = "nats-streaming-server";
 
     // Enable this for additional server debugging info.
@@ -51,23 +51,23 @@ class STANServer implements Runnable, AutoCloseable {
         }
     }
 
-    public STANServer() {
+    public StanServer() {
         this(null, -1, false);
     }
 
-    public STANServer(String id) {
+    public StanServer(String id) {
         this(id, -1, false);
     }
 
-    public STANServer(boolean debug) {
+    public StanServer(boolean debug) {
         this(null, -1, debug);
     }
 
-    public STANServer(int port) {
+    public StanServer(int port) {
         this(null, port, false);
     }
 
-    public STANServer(int port, boolean debug) {
+    public StanServer(int port, boolean debug) {
         this.debug = debug;
         psInfo = this.createProcessStartInfo();
 
@@ -78,11 +78,11 @@ class STANServer implements Runnable, AutoCloseable {
         start();
     }
 
-    public STANServer(String id, boolean debug) {
+    public StanServer(String id, boolean debug) {
         this(id, -1, debug);
     }
 
-    public STANServer(String id, int port, boolean debug) {
+    public StanServer(String id, int port, boolean debug) {
         this.debug = debug;
         psInfo = this.createProcessStartInfo();
 
