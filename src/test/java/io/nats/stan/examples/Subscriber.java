@@ -34,7 +34,7 @@ public class Subscriber {
     private Duration since;
 
     static final String usageString = "\nUsage: java Subscriber [options] <subject>\n\nOptions:\n"
-            + "    -s,  --server   <url>            STAN server URL(s)\n"
+            + "    -s,  --server   <urls>            STAN server URL(s)\n"
             + "    -c,  --cluster  <cluster name>   STAN cluster name\n"
             + "    -id, --clientid <client ID>      STAN client ID               \n\n"
             + "Subscription Options:                                             \n"

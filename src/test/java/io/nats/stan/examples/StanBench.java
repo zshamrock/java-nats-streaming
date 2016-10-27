@@ -78,10 +78,13 @@ public class StanBench {
     private Benchmark bench;
 
     static final String usageString =
-            "\nUsage: nats-bench [-s server] [--tls] [-id clientid] [-np #pubs] [-ns #subs] "
-                    + "[-n #msg] [-mpa #pubacks] [-ms size] "
+            "\nUsage: nats-bench [-s server] [--tls] [-c clusterid] [-id clientid] [-np #pubs] "
+                    + "[-ns #subs] [-n #msg] [-mpa #pubacks] [-ms size] "
                     + "[-io] [-a] [-csv file] <subject>\n\nOptions:\n"
-                    + "    -s   <urls>                     NATS server URLs (separated by comma)\n"
+                    + "    -s   <urls>                     NATS Streaming server URLs (separated by"
+                    + " comma)\n"
+                    + "    -cid                            NATS Streaming cluster ID\n"
+                    + "    -id                             Benchmark process base client ID\n"
                     + "    -tls                            Use TLS secure connection\n"
                     + "    -np                             Number of concurrent publishers\n"
                     + "    -ns                             Number of concurrent subscribers\n"
@@ -91,7 +94,6 @@ public class StanBench {
                     + "    -io                             Subscribers ignore old messages\n"
                     + "    -ms                             Message size in bytes\n"
                     + "    -mpa                            Max number of published acks in flight\n"
-                    + "    -id                             Benchmark process base client ID\n"
                     + "    -csv                            Save bench data to csv file\n";
 
     /**
@@ -471,6 +473,15 @@ public class StanBench {
                     }
                     it.remove();
                     clientId = it.next();
+                    it.remove();
+                    continue;
+                case "-c":
+                case "-cid":
+                    if (!it.hasNext()) {
+                        usage();
+                    }
+                    it.remove();
+                    clusterId = it.next();
                     it.remove();
                     continue;
                 case "-csv":
