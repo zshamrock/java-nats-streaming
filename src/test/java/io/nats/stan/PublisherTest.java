@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-@Category(UnitTest.class)
+@Category(IntegrationTest.class)
 public class PublisherTest {
     static final Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     static final Logger logger = (Logger) LoggerFactory.getLogger(PublisherTest.class);

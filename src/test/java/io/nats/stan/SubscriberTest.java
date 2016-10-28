@@ -27,7 +27,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
 
-@Category(UnitTest.class)
+@Category(IntegrationTest.class)
 public class SubscriberTest {
     static final Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     static final Logger logger = (Logger) LoggerFactory.getLogger(SubscriberTest.class);
