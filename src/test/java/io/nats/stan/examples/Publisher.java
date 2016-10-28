@@ -28,9 +28,9 @@ public class Publisher {
 
     static final String usageString =
             "\nUsage: java Publisher [options] <subject> <message>\n\nOptions:\n"
-                    + "    -s, --server   <urls>           STAN server URL(s)\n"
-                    + "    -c, --cluster  <cluster name>   STAN cluster name\n"
-                    + "    -id,--clientid <client ID>      STAN client ID\n"
+                    + "    -s, --server   <urls>           NATS Streaming server URL(s)\n"
+                    + "    -c, --cluster  <cluster name>   NATS Streaming cluster name\n"
+                    + "    -id,--clientid <client ID>      NATS Streaming client ID\n"
                     + "    -a, --async                     Asynchronous publish mode";
 
     /**
@@ -106,10 +106,9 @@ public class Publisher {
         } catch (IOException e) {
             if (e.getMessage().equals(io.nats.client.Constants.ERR_NO_SERVERS)) {
                 String err = String.format(
-                        "Can't connect: %v.\nMake sure a NATS Streaming Server is running at: %s",
+                        "Can't connect: %s.\nMake sure a NATS Streaming Server is running at: %s",
                         e.getMessage(), urls);
-                System.err.println(err);
-                System.exit(-1);
+                throw new IOException(err);
             } else {
                 throw (e);
             }
