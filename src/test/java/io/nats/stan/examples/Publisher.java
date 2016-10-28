@@ -6,6 +6,7 @@
 
 package io.nats.stan.examples;
 
+import io.nats.stan.AckHandler;
 import io.nats.stan.Connection;
 import io.nats.stan.ConnectionFactory;
 
@@ -14,61 +15,121 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeoutException;
 
 public class Publisher {
-    String url;
+    String urls;
     String subject;
-    String payload;
+    String payloadString;
     String clusterId = "test-cluster";
     String clientId = "test-client";
     boolean async;
 
     static final String usageString =
             "\nUsage: java Publisher [options] <subject> <message>\n\nOptions:\n"
-                    + "    -s, --server   <url>            STAN server URL(s)\n"
-                    + "    -c, --cluster  <cluster name>   STAN cluster name\n"
-                    + "    -id,--clientid <client ID>      STAN client ID\n"
+                    + "    -s, --server   <urls>           NATS Streaming server URL(s)\n"
+                    + "    -c, --cluster  <cluster name>   NATS Streaming cluster name\n"
+                    + "    -id,--clientid <client ID>      NATS Streaming client ID\n"
                     + "    -a, --async                     Asynchronous publish mode";
 
-    Publisher(String[] args) throws IOException, TimeoutException {
+    /**
+     * Main constructor for Publisher.
+     * 
+     * @param args the command line arguments
+     * @throws IOException if something goes wrong
+     * @throws TimeoutException if the connection times out
+     */
+    public Publisher(String[] args) {
         parseArgs(args);
-        if (subject == null) {
-            usage();
-        }
     }
 
-    void usage() {
+    static void usage() {
         System.err.println(usageString);
-        System.exit(-1);
     }
 
-    void run() throws IOException, TimeoutException {
+    public void run() throws Exception {
         ConnectionFactory cf = new ConnectionFactory(clusterId, clientId);
-        if (url != null) {
-            cf.setNatsUrl(url);
+        if (urls != null) {
+            cf.setNatsUrl(urls);
         }
+
         try (Connection sc = cf.createConnection()) {
-            // System.out.println("Connected successfully to " + cf.getNatsUrl());
-            sc.publish(subject, payload.getBytes());
-            System.err.printf("Published [%s] : '%s'\n", subject, payload);
+            final CountDownLatch latch = new CountDownLatch(1);
+            final String[] guid = new String[1];
+            byte[] payload = payloadString.getBytes();
+
+            AckHandler acb = new AckHandler() {
+                @Override
+                public void onAck(String nuid, Exception ex) {
+                    System.out.printf("Received ACK for guid %s\n", nuid);
+                    if (ex != null) {
+                        System.err.printf("Error in server ack for guid %s: %s", nuid,
+                                ex.getMessage());
+                    }
+                    if (!guid[0].equals(nuid)) {
+                        System.err.printf(
+                                "Expected a matching guid in ack callback, got %s vs %s\n", nuid,
+                                guid);
+                    }
+                    System.out.flush();
+                    latch.countDown();
+                }
+            };
+
+            if (!async) {
+                try {
+                    sc.publish(subject, payload);
+                } catch (Exception e) {
+                    System.err.printf("Error during publish: {}\n", e.getMessage());
+                    throw (e);
+                }
+                System.out.printf("Published [%s] : '%s'\n", subject, payloadString);
+            } else {
+                try {
+                    guid[0] = sc.publish(subject, payload, acb);
+                    latch.await();
+                } catch (IOException e) {
+                    System.err.printf("Error during async publish: %s\n", e.getMessage());
+                    throw (e);
+                }
+
+                if (guid[0].isEmpty()) {
+                    String msg = "Expected non-empty guid to be returned.";
+                    System.err.println(msg);
+                    throw new IOException(msg);
+                }
+                System.out.printf("Published [%s] : '%s' [guid: %s]\n", subject, payloadString,
+                        guid[0]);
+            }
+
+        } catch (IOException e) {
+            if (e.getMessage().equals(io.nats.client.Constants.ERR_NO_SERVERS)) {
+                String err = String.format(
+                        "Can't connect: %s.\nMake sure a NATS Streaming Server is running at: %s",
+                        e.getMessage(), urls);
+                throw new IOException(err);
+            } else {
+                throw (e);
+            }
+        } catch (TimeoutException e) {
+            throw (e);
         }
     }
 
-    private void parseArgs(String[] args) {
+    void parseArgs(String[] args) {
         if (args == null || args.length < 2) {
-            usage();
-            return;
+            throw new IllegalArgumentException("must supply at least subject and msg");
         }
 
         List<String> argList = new ArrayList<String>(Arrays.asList(args));
 
-        // The last two args should be subject and payload
-        // get the payload and remove it from args
-        payload = argList.remove(argList.size() - 1);
+        // The last two args should be subject and payloadString
+        // get the payloadString and remove it from args
+        payloadString = argList.remove(argList.size() - 1);
 
         // get the subject and remove it from args
-        subject = argList.remove(argList.size() - 1);;
+        subject = argList.remove(argList.size() - 1);
 
         // Anything left is flags + args
         Iterator<String> it = argList.iterator();
@@ -78,16 +139,16 @@ public class Publisher {
                 case "-s":
                 case "--server":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
-                    url = it.next();
+                    urls = it.next();
                     it.remove();
                     continue;
                 case "-c":
                 case "--cluster":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
                     clusterId = it.next();
@@ -96,7 +157,7 @@ public class Publisher {
                 case "-id":
                 case "--clientid":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
                     clientId = it.next();
@@ -108,9 +169,8 @@ public class Publisher {
                     it.remove();
                     continue;
                 default:
-                    System.err.printf("Unexpected token: '%s'\n", arg);
-                    usage();
-                    break;
+                    throw new IllegalArgumentException(
+                            String.format("Unexpected token: '%s'", arg));
             }
         }
     }
@@ -118,16 +178,18 @@ public class Publisher {
     /**
      * Publishes a message to a subject.
      * 
-     * @param args the subject, message payload, and other arguments
+     * @param args the subject, message payloadString, and other arguments
+     * @throws Exception if something goes awry
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         try {
             new Publisher(args).run();
-        } catch (IOException | TimeoutException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-            System.exit(-1);
+        } catch (IllegalArgumentException e) {
+            System.out.flush();
+            System.err.println(e.getMessage());
+            Publisher.usage();
+            System.err.flush();
+            throw e;
         }
-        System.exit(0);
     }
 }

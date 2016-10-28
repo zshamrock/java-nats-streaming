@@ -17,6 +17,9 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 public class StanBenchTest {
@@ -43,10 +46,55 @@ public class StanBenchTest {
     @After
     public void tearDown() throws Exception {}
 
-    // @Test
-    // public void testStanBenchStringArray() {
-    // fail("Not yet implemented"); // TODO
-    // }
+    @Test
+    public void testStanBenchStringArray() {
+        try (StanServer srv = runDefaultServer()) {
+            final String urls = "nats://localhost:4222";
+            final String clientId = NUID.nextGlobal();
+            final String clusterId = "my_test_cluster";
+            final int count = 1000;
+            final int numPubs = 1;
+            final int numSubs = 1;
+            final int msgSize = 256;
+            final boolean secure = false;
+            final boolean ignoreOld = true;
+            final boolean async = true;
+            final String subject = "foo";
+
+            List<String> argList = new ArrayList<String>();
+            argList.addAll(Arrays.asList("-s", urls));
+            argList.addAll(Arrays.asList("-c", clusterId));
+            argList.addAll(Arrays.asList("-id", clientId));
+            argList.addAll(Arrays.asList("-np", Integer.toString(numPubs)));
+            argList.addAll(Arrays.asList("-ns", Integer.toString(numSubs)));
+            argList.addAll(Arrays.asList("-n", Integer.toString(count)));
+            argList.addAll(Arrays.asList("-ms", Integer.toString(msgSize)));
+
+            if (secure) {
+                argList.add("-tls");
+            }
+
+            if (ignoreOld) {
+                argList.add("-io");
+            }
+
+            if (async) {
+                argList.add("-a");
+            }
+
+            argList.add(subject);
+
+            String[] args = new String[argList.size()];
+            args = argList.toArray(args);
+
+            final StanBench bench = new StanBench(args);
+            try {
+                bench.run();
+            } catch (Exception e) {
+                fail(e.getMessage());
+            }
+        }
+    }
 
     @Test
     public void testStanBenchProperties() {
@@ -57,7 +105,7 @@ public class StanBenchTest {
             props.setProperty("bench.stan.cluster.id", "my_test_cluster");
             props.setProperty("bench.stan.client.id", client);
             props.setProperty("bench.stan.secure", "false");
-            props.setProperty("bench.stan.msg.count", "10000");
+            props.setProperty("bench.stan.msg.count", "1000");
             props.setProperty("bench.stan.msg.size", "0");
             props.setProperty("bench.stan.secure", "false");
             props.setProperty("bench.stan.pubs", "1");

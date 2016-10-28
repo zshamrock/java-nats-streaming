@@ -7,15 +7,14 @@ import io.nats.stan.MessageHandler;
 import io.nats.stan.Subscription;
 import io.nats.stan.SubscriptionOptions;
 
-import java.io.IOException;
 import java.text.ParseException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -32,73 +31,94 @@ public class Subscriber {
     private boolean all;
     private boolean last;
     private Duration since;
+    private int count = 0;
+    private boolean unsubscribe;
 
     static final String usageString = "\nUsage: java Subscriber [options] <subject>\n\nOptions:\n"
-            + "    -s,  --server   <url>            STAN server URL(s)\n"
-            + "    -c,  --cluster  <cluster name>   STAN cluster name\n"
-            + "    -id, --clientid <client ID>      STAN client ID               \n\n"
+            + "    -s,  --server   <urls>           NATS Streaming server URL(s)\n"
+            + "    -c,  --cluster  <cluster name>   NATS Streaming cluster name\n"
+            + "    -id, --clientid <client ID>      NATS Streaming client ID               \n\n"
             + "Subscription Options:                                             \n"
-            + "     -q, --qgroup <name>             Queue group\n"
-            + "         --seq    <seqno>            Start at seqno\n"
+            + "     -q, --qgroup   <name>           Queue group\n"
+            + "         --seq      <seqno>          Start at seqno\n"
             + "         --all                       Deliver all available messages\n"
             + "         --last                      Deliver starting with last published message\n"
-            + "         --since  <duration>         Deliver messages in last interval "
+            + "         --since    <duration>       Deliver messages in last interval "
             + "(e.g. 1s, 1hr)\n" + "                   (format: 00d00h00m00s00ns)\n"
-            + "         --durable <name>            Durable subscriber name";
+            + "         --durable  <name>           Durable subscriber name\n"
+            + "         --unsubscribe               Unsubscribe the durable on exit\n"
+            + "         --count    <num>            Number of messages to receive";
 
-    Subscriber(String[] args) {
+    public Subscriber(String[] args) {
         parseArgs(args);
-        if (subject == null) {
-            usage();
-        }
     }
 
-    void usage() {
+    public static void usage() {
         System.err.println(usageString);
-        System.exit(-1);
     }
 
-    void run() throws IOException, TimeoutException {
+    public void run() throws Exception {
         ConnectionFactory cf = new ConnectionFactory(clusterId, clientId);
         if (url != null) {
             cf.setNatsUrl(url);
         }
 
+        final CountDownLatch done = new CountDownLatch(1);
+        final CountDownLatch start = new CountDownLatch(1);
+        final AtomicInteger delivered = new AtomicInteger(0);
+
+
+        Thread hook = null;
+
         try (final Connection sc = cf.createConnection()) {
-            // System.out.println("Connected successfully to " + cf.getNatsUrl());
-            AtomicInteger count = new AtomicInteger();
-            try (final Subscription sub = sc.subscribe(subject, qgroup, new MessageHandler() {
-                public void onMessage(Message msg) {
-                    System.out.printf("[#%d] Received on [%s]: '%s'\n", count.incrementAndGet(),
-                            msg.getSubject(), msg);
-                }
-            }, builder.build())) {
-                System.err.printf("Listening on [%s], clientID=[%s], qgroup=[%s] durable=[%s]\n",
-                        sub.getSubject(), clientId, sub.getQueue(),
-                        sub.getOptions().getDurableName());
-                Runtime.getRuntime().addShutdownHook(new Thread() {
-                    public void run() {
+            try {
+                final Subscription sub = sc.subscribe(subject, qgroup, new MessageHandler() {
+                    public void onMessage(Message msg) {
                         try {
-                            System.err.println("\nCaught CTRL-C, shutting down gracefully...\n");
-                            sub.unsubscribe();
-                            sc.close();
-                        } catch (IOException | TimeoutException e) {
-                            // TODO Auto-generated catch block
-                            e.printStackTrace();
+                            start.await();
+                        } catch (InterruptedException e) {
+                            /* NOOP */
+                        }
+                        System.out.printf("[#%d] Received on [%s]: '%s'\n",
+                                delivered.incrementAndGet(), msg.getSubject(), msg);
+                        if (delivered.get() == count) {
+                            done.countDown();
                         }
                     }
-                });
-                while (true) {
-                    // loop forever
+                }, builder.build());
+                hook = new Thread() {
+                    public void run() {
+                        System.err.println("\nCaught CTRL-C, shutting down gracefully...\n");
+                        try {
+                            if (durable == null || durable.isEmpty() || unsubscribe) {
+                                sub.unsubscribe();
+                            }
+                            sc.close();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        done.countDown();
+                    }
+                };
+                Runtime.getRuntime().addShutdownHook(hook);
+                System.out.printf("Listening on [%s], clientID=[%s], qgroup=[%s] durable=[%s]\n",
+                        sub.getSubject(), clientId, sub.getQueue(),
+                        sub.getOptions().getDurableName());
+                start.countDown();
+                done.await();
+                if (durable == null || durable.isEmpty() || unsubscribe) {
+                    sub.unsubscribe();
                 }
+                sc.close();
+            } finally {
+                Runtime.getRuntime().removeShutdownHook(hook);
             }
         }
     }
 
-    private void parseArgs(String[] args) {
+    void parseArgs(String[] args) {
         if (args == null || args.length < 1) {
-            usage();
-            return;
+            throw new IllegalArgumentException("must supply at least a subject name");
         }
 
         List<String> argList = new ArrayList<String>(Arrays.asList(args));
@@ -115,7 +135,7 @@ public class Subscriber {
                 case "-s":
                 case "--server":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
                     url = it.next();
@@ -124,7 +144,7 @@ public class Subscriber {
                 case "-c":
                 case "--cluster":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
                     clusterId = it.next();
@@ -133,7 +153,7 @@ public class Subscriber {
                 case "-id":
                 case "--clientid":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
                     clientId = it.next();
@@ -142,7 +162,7 @@ public class Subscriber {
                 case "-q":
                 case "--qgroup":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
                     qgroup = it.next();
@@ -150,55 +170,65 @@ public class Subscriber {
                     continue;
                 case "--seq":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
-                    builder.startAtSequence(Long.parseLong(it.next()));
+                    seq = Long.parseLong(it.next());
+                    builder.startAtSequence(seq);
                     it.remove();
                     continue;
                 case "--all":
+                    all = true;
                     builder.deliverAllAvailable();
                     it.remove();
                     continue;
                 case "--last":
+                    last = true;
                     builder.startWithLastReceived();
                     it.remove();
                     continue;
                 case "--since":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
                     try {
-                        builder.startAtTimeDelta(parseDuration(it.next()));
+                        since = parseDuration(it.next());
+                        builder.startAtTimeDelta(since);
                     } catch (ParseException e) {
-                        e.printStackTrace();
-                        usage();
+                        throw new IllegalArgumentException(e.getMessage());
                     }
                     it.remove();
                     continue;
                 case "--durable":
                     if (!it.hasNext()) {
-                        usage();
+                        throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
-                    builder.setDurableName(it.next());
+                    durable = it.next();
+                    builder.setDurableName(durable);
+                    it.remove();
+                    continue;
+                case "-u":
+                case "--unsubscribe":
+                    unsubscribe = true;
+                    it.remove();
+                    continue;
+                case "--count":
+                    if (!it.hasNext()) {
+                        throw new IllegalArgumentException(arg + " requires an argument");
+                    }
+                    it.remove();
+                    count = Integer.parseInt(it.next());
                     it.remove();
                     continue;
                 default:
-                    System.err.printf("Unexpected token: '%s'\n", arg);
-                    usage();
-                    break;
+                    throw new IllegalArgumentException("Unexpected token: '%s'");
             }
         }
-        if (qgroup != null && durable != null) {
-            System.err.println("Durable subscription cannot be used with queue group");
-            usage();
-        }
-
     }
 
-    private static Pattern p =
+    private static Pattern pattern =
             Pattern.compile("(\\d+)d\\s*(\\d+)h\\s*(\\d+)m\\s*(\\d+)s\\s*(\\d+)ns");
 
     /**
@@ -207,20 +237,20 @@ public class Subscriber {
      * @throws ParseException if the duration can't be parsed
      */
     public static Duration parseDuration(String duration) throws ParseException {
-        Matcher m = p.matcher(duration);
+        Matcher matcher = pattern.matcher(duration);
 
         long nanoseconds = 0L;
 
-        if (m.find() && m.groupCount() == 4) {
-            int days = Integer.parseInt(m.group(1));
+        if (matcher.find() && matcher.groupCount() == 4) {
+            int days = Integer.parseInt(matcher.group(1));
             nanoseconds += TimeUnit.NANOSECONDS.convert(days, TimeUnit.DAYS);
-            int hours = Integer.parseInt(m.group(2));
+            int hours = Integer.parseInt(matcher.group(2));
             nanoseconds += TimeUnit.NANOSECONDS.convert(hours, TimeUnit.HOURS);
-            int minutes = Integer.parseInt(m.group(3));
+            int minutes = Integer.parseInt(matcher.group(3));
             nanoseconds += TimeUnit.NANOSECONDS.convert(minutes, TimeUnit.MINUTES);
-            int seconds = Integer.parseInt(m.group(4));
+            int seconds = Integer.parseInt(matcher.group(4));
             nanoseconds += TimeUnit.NANOSECONDS.convert(seconds, TimeUnit.SECONDS);
-            long nanos = Long.parseLong(m.group(5));
+            long nanos = Long.parseLong(matcher.group(5));
             nanoseconds += nanos;
         } else {
             throw new ParseException("Cannot parse duration " + duration, 0);
@@ -234,13 +264,15 @@ public class Subscriber {
      * 
      * @param args the subject, cluster info, and subscription options
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         try {
             new Subscriber(args).run();
-        } catch (IOException | TimeoutException e) {
-            e.printStackTrace();
-            System.exit(-1);
+        } catch (IllegalArgumentException e) {
+            System.out.flush();
+            System.err.println(e.getMessage());
+            Subscriber.usage();
+            System.err.flush();
+            throw e;
         }
-        System.exit(0);
     }
 }
