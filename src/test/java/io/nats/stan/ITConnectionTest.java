@@ -6,6 +6,7 @@
 
 package io.nats.stan;
 
+import static io.nats.stan.UnitTestUtilities.runDefaultServer;
 import static io.nats.stan.UnitTestUtilities.runServer;
 import static io.nats.stan.UnitTestUtilities.sleep;
 import static org.junit.Assert.assertArrayEquals;
@@ -41,6 +42,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -119,16 +121,61 @@ public class ITConnectionTest {
         }
     }
 
-    // @Test
-    // public void testConnClosedOnConnectFailure() throws IOException, TimeoutException {
-    // try (StanServer s = runDefaultServer()) {
-    // try (Connection sc = newDefaultConnection()) {
-    // // Non-Existent or Unreachable
-    // int connectTime = 25;
-    //
-    // }
-    // }
-    // }
+    @Test
+    public void testConnClosedOnConnectFailure() throws IOException, TimeoutException {
+        try (StanServer srv = runDefaultServer()) {
+            ConnectionFactory cf = new ConnectionFactory();
+            // Non-Existent or Unreachable
+            int connectTime = 25;
+            cf.setConnectTimeout(connectTime, TimeUnit.MILLISECONDS);
+            cf.setClientId("myTestClient");
+            cf.setClusterId("someNonExistentServerId");
+            boolean exThrown = false;
+            Connection sc = null;
+            try {
+                sc = cf.createConnection();
+            } catch (Throwable e) {
+                assertEquals(ConnectionImpl.ERR_CONNECTION_REQ_TIMEOUT, e.getMessage());
+                exThrown = true;
+            } finally {
+                assertTrue(exThrown);
+            }
+
+            // Check that the underlying NATS connection has been closed.
+            // We will first stop the server. If we have left the NATS connection
+            // opened, it should be trying to reconnect.
+            srv.shutdown();
+
+            // Wait a bit
+            sleep(500, TimeUnit.MILLISECONDS);
+
+            // Inspect threads to find reconnect
+            // Thread reconnectThread = getThreadByName("reconnect");
+            // assertNull("NATS Connection suspected to not have been closed.", reconnectThread);
+            StackTraceElement[] stack = getStackTraceByName("reconnect");
+            if (stack != null) {
+                for (StackTraceElement el : stack) {
+                    System.err.println(el);
+                    assertFalse("NATS Connection suspected to not have been closed.",
+                            el.toString().contains("doReconnect"));
+                }
+            }
+        }
+    }
+
+    StackTraceElement[] getStackTraceByName(String threadName) {
+        Thread key = getThreadByName(threadName);
+        return Thread.getAllStackTraces().get(key);
+    }
+
+    public Thread getThreadByName(String threadName) {
+        Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+        for (Thread t : threadSet) {
+            if (t.getName().equals(threadName))
+                return t;
+        }
+        return null;
+    }
 
     @Test
     public void testBasicConnect() {

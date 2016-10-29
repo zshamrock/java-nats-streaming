@@ -8,10 +8,11 @@ package io.nats.stan;
 
 
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.matches;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -99,6 +100,8 @@ class UnitTestUtilities {
         final String hbInbox = String.format("_INBOX.%s", io.nats.client.NUID.nextGlobal());
 
         io.nats.client.Connection nc = mock(io.nats.client.Connection.class);
+
+        doReturn(true).when(nc).isConnected();
 
         when(nc.newInbox()).thenReturn(hbInbox);
 
