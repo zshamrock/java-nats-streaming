@@ -439,17 +439,17 @@ public class ConnectionImplTest {
     @Test
     public void testCloseRequestTimeout() {
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
-            doThrow(new TimeoutException()).when(conn.nc).request(eq(conn.closeRequests),
-                    any(byte[].class), any(long.class));
+            doThrow(new TimeoutException(io.nats.client.Constants.ERR_TIMEOUT)).when(conn.nc)
+                    .request(eq(conn.closeRequests), any(byte[].class), any(long.class));
             boolean exThrown = false;
             try {
                 conn.close();
-            } catch (Exception e) {
-                assertTrue(e instanceof TimeoutException);
+            } catch (TimeoutException e) {
                 assertEquals(ConnectionImpl.ERR_CLOSE_REQ_TIMEOUT, e.getMessage());
                 exThrown = true;
+            } finally {
+                assertTrue("Should have thrown exception", exThrown);
             }
-            assertTrue("Should have thrown exception", exThrown);
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());
