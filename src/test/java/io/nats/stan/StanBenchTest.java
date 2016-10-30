@@ -1,6 +1,7 @@
 package io.nats.stan;
 
-import static io.nats.stan.UnitTestUtilities.runDefaultServer;
+import static io.nats.stan.UnitTestUtilities.runServer;
+import static io.nats.stan.UnitTestUtilities.testClusterName;
 import static org.junit.Assert.fail;
 
 import io.nats.client.NUID;
@@ -48,7 +49,7 @@ public class StanBenchTest {
 
     @Test
     public void testStanBenchStringArray() {
-        try (StanServer srv = runDefaultServer()) {
+        try (StanServer srv = runServer(testClusterName)) {
             final String urls = "nats://localhost:4222";
             final String clientId = NUID.nextGlobal();
             final String clusterId = "my_test_cluster";
@@ -98,7 +99,7 @@ public class StanBenchTest {
 
     @Test
     public void testStanBenchProperties() {
-        try (StanServer srv = runDefaultServer()) {
+        try (StanServer srv = runServer(testClusterName)) {
             Properties props = new Properties();
             String client = NUID.nextGlobal();
             props.setProperty("bench.stan.servers", "nats://localhost:4222");

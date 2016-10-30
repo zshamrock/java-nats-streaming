@@ -1,6 +1,7 @@
 package io.nats.stan;
 
-import static io.nats.stan.UnitTestUtilities.runDefaultServer;
+import static io.nats.stan.UnitTestUtilities.runServer;
+import static io.nats.stan.UnitTestUtilities.testClusterName;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -114,7 +115,7 @@ public class SubscriberTest {
 
     @Test(timeout = 5000)
     public void testMainSuccess() throws Exception {
-        try (StanServer srv = runDefaultServer()) {
+        try (StanServer srv = runServer(testClusterName)) {
             Publisher.main(new String[] { "-c", clusterId, "foo", "bar" });
             Subscriber.main(new String[] { "-c", clusterId, "--all", "--count", "1", "foo" });
         }

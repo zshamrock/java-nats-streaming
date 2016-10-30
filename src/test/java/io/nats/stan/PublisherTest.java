@@ -1,6 +1,6 @@
 package io.nats.stan;
 
-import static io.nats.stan.UnitTestUtilities.runDefaultServer;
+import static io.nats.stan.UnitTestUtilities.runServer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -58,7 +58,7 @@ public class PublisherTest {
         String[] args = new String[argList.size()];
         args = argList.toArray(args);
 
-        try (StanServer srv = runDefaultServer()) {
+        try (StanServer srv = runServer(clusterId)) {
             new Publisher(args).run();
         }
     }
@@ -74,7 +74,7 @@ public class PublisherTest {
         String[] args = new String[argList.size()];
         args = argList.toArray(args);
 
-        try (StanServer srv = runDefaultServer()) {
+        try (StanServer srv = runServer(clusterId)) {
             new Publisher(args).run();
         }
     }
@@ -125,14 +125,14 @@ public class PublisherTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testMainFails() throws Exception {
-        try (StanServer srv = runDefaultServer()) {
+        try (StanServer srv = runServer(clusterId)) {
             Publisher.main(new String[] { "foobar" });
         }
     }
 
     @Test
     public void testMainSuccess() throws Exception {
-        try (StanServer srv = runDefaultServer()) {
+        try (StanServer srv = runServer(clusterId)) {
             Publisher.main(new String[] { "-c", clusterId, "foo", "bar" });
         }
     }

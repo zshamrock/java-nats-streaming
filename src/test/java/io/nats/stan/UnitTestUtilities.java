@@ -381,14 +381,6 @@ class UnitTestUtilities {
         return val;
     }
 
-    // static StanServer runDefaultServer() {
-    // return runServer(testClusterName, false);
-    // }
-    //
-    // static StanServer runDefaultServer(boolean debug) {
-    // return runServer(testClusterName, debug);
-    // }
-
     static StanServer runServer(String clusterId) {
         return runServer(clusterId, false);
     }
