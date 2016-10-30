@@ -1,6 +1,13 @@
 Change Log
 ==========
 
+## Version 0.4.0
+_2016-10-30_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.3.0...0.4.0)
+ * Bump jnats dependency to `jnats-0.7.1`, thus improving synchronous publish performance significantly.
+ * Added benchmark utility to examples.
+ * Updated functional/integration test coverage to match `go-nats-streaming` tests.
+ * Repository structure changes
+
 ## Version 0.3.0
 _2016-09-14_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.2.1...0.3.0)
  * [#29] Added `getNatsConnection()` public API for getting underlying NATS connection.
