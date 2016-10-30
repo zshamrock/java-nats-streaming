@@ -281,9 +281,10 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 Message reply = null;
                 try {
                     reply = nc.request(closeRequests, bytes, opts.getConnectTimeout().toMillis());
-                } catch (TimeoutException e) {
-                    throw new TimeoutException(ERR_CLOSE_REQ_TIMEOUT);
                 } catch (Exception e) {
+                    if (io.nats.client.Constants.ERR_TIMEOUT.equals(e.getMessage())) {
+                        throw new TimeoutException(ERR_CLOSE_REQ_TIMEOUT);
+                    }
                     throw e;
                 }
                 logger.trace("CLOSE response: [{}]", reply);
