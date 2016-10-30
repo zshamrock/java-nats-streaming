@@ -18,10 +18,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.matches;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -243,28 +243,24 @@ public class ConnectionImplTest {
     }
 
     @Test
-    public void testConnectTimeout() {
+    public void testConnectTimeout() throws IOException, TimeoutException {
         try (io.nats.client.Connection nconn = setupMockNatsConnection()) {
             // Test for request TimeoutException
             String discoverSubject =
                     String.format("%s.%s", ConnectionImpl.DEFAULT_DISCOVER_PREFIX, testClusterName);
-            doThrow(new TimeoutException()).when(nconn).request(eq(discoverSubject),
-                    any(byte[].class), any(long.class));
+            doThrow(new TimeoutException(io.nats.client.Constants.ERR_TIMEOUT)).when(nconn)
+                    .request(eq(discoverSubject), any(byte[].class), any(long.class));
 
             Options opts = new Options.Builder().setNatsConn(nconn).create();
             boolean exThrown = false;
             try (ConnectionImpl conn = new ConnectionImpl(testClusterName, testClientName, opts)) {
                 conn.connect();
             } catch (Exception e) {
-                assertTrue("Wrong exception type: " + e.getClass().getName(),
-                        e instanceof TimeoutException);
+                assertTrue("Wrong exception type: " + e, e instanceof TimeoutException);
                 assertEquals(ConnectionImpl.ERR_CONNECTION_REQ_TIMEOUT, e.getMessage());
                 exThrown = true;
             }
             assertTrue("Should have thrown TimeoutException", exThrown);
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail(e.getMessage());
         }
     }
 
@@ -443,17 +439,17 @@ public class ConnectionImplTest {
     @Test
     public void testCloseRequestTimeout() {
         try (ConnectionImpl conn = (ConnectionImpl) Mockito.spy(newMockedConnection())) {
-            doThrow(new TimeoutException()).when(conn.nc).request(eq(conn.closeRequests),
-                    any(byte[].class), any(long.class));
+            doThrow(new TimeoutException(io.nats.client.Constants.ERR_TIMEOUT)).when(conn.nc)
+                    .request(eq(conn.closeRequests), any(byte[].class), any(long.class));
             boolean exThrown = false;
             try {
                 conn.close();
-            } catch (Exception e) {
-                assertTrue(e instanceof TimeoutException);
+            } catch (TimeoutException e) {
                 assertEquals(ConnectionImpl.ERR_CLOSE_REQ_TIMEOUT, e.getMessage());
                 exThrown = true;
+            } finally {
+                assertTrue("Should have thrown exception", exThrown);
             }
-            assertTrue("Should have thrown exception", exThrown);
         } catch (Exception e) {
             e.printStackTrace();
             fail(e.getMessage());

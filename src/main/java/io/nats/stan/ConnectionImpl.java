@@ -133,68 +133,86 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     // Connect will form a connection to the STAN subsystem.
     void connect() throws IOException, TimeoutException {
+        boolean exThrown = false;
         io.nats.client.Connection nc = getNatsConnection();
         // Create a NATS connection if it doesn't exist
         if (nc == null) {
             nc = createNatsConnection();
             setNatsConnection(nc);
             ncOwned = true;
+        } else if (!nc.isConnected()) {
+            // Bail if the custom NATS connection is disconnected
+            throw new IOException(ERR_BAD_CONNECTION);
         }
 
-        // Create a heartbeat inbox
-        hbInbox = nc.newInbox();
-        hbCallback = new MessageHandler() {
-            @Override
-            public void onMessage(Message msg) {
-                processHeartBeat(msg);
-            }
-        };
-        hbSubscription = nc.subscribe(hbInbox, hbCallback);
-
-        // Send Request to discover the cluster
-        String discoverSubject = String.format("%s.%s", opts.getDiscoverPrefix(), clusterId);
-        ConnectRequest req = ConnectRequest.newBuilder().setClientID(clientId)
-                .setHeartbeatInbox(hbInbox).build();
-        // logger.trace("Sending ConnectRequest:\n{}", req.toString().trim());
-        byte[] bytes = req.toByteArray();
-        Message reply = null;
         try {
+            // Create a heartbeat inbox
+            hbInbox = nc.newInbox();
+            hbCallback = new MessageHandler() {
+                @Override
+                public void onMessage(Message msg) {
+                    processHeartBeat(msg);
+                }
+            };
+            hbSubscription = nc.subscribe(hbInbox, hbCallback);
+
+            // Send Request to discover the cluster
+            String discoverSubject = String.format("%s.%s", opts.getDiscoverPrefix(), clusterId);
+            ConnectRequest req = ConnectRequest.newBuilder().setClientID(clientId)
+                    .setHeartbeatInbox(hbInbox).build();
+            // logger.trace("Sending ConnectRequest:\n{}", req.toString().trim());
+            byte[] bytes = req.toByteArray();
+            Message reply = null;
             reply = nc.request(discoverSubject, bytes, opts.getConnectTimeout().toMillis());
-        } catch (TimeoutException e) {
-            throw new TimeoutException(ERR_CONNECTION_REQ_TIMEOUT);
-        } catch (IOException e) {
-            throw e;
-        }
 
-        ConnectResponse cr = ConnectResponse.parseFrom(reply.getData());
-        if (!cr.getError().isEmpty()) {
-            // This is already a properly formatted stan error message
-            // (ConnectionImpl.SERVER_ERR_INVALID_CLIENT)
-            throw new IOException(cr.getError());
-        }
-        logger.trace("Received ConnectResponse:\n{}", cr);
-
-        // Capture cluster configuration endpoints to publish and
-        // subscribe/unsubscribe.
-        pubPrefix = cr.getPubPrefix();
-        subRequests = cr.getSubRequests();
-        unsubRequests = cr.getUnsubRequests();
-        closeRequests = cr.getCloseRequests();
-
-        // Setup the ACK subscription
-        ackSubject = String.format("%s.%s", DEFAULT_ACK_PREFIX, NUID.nextGlobal());
-        ackSubscription = nc.subscribe(ackSubject, new MessageHandler() {
-            public void onMessage(io.nats.client.Message msg) {
-                processAck(msg);
+            ConnectResponse cr = ConnectResponse.parseFrom(reply.getData());
+            if (!cr.getError().isEmpty()) {
+                // This is already a properly formatted stan error message
+                // (ConnectionImpl.SERVER_ERR_INVALID_CLIENT)
+                throw new IOException(cr.getError());
             }
-        });
-        ackSubscription.setPendingLimits(1024 ^ 2, 32 * 1024 ^ 2);
-        pubAckMap = new HashMap<String, AckClosure>();
+            logger.trace("Received ConnectResponse:\n{}", cr);
 
-        // Create Subscription map
-        subMap = new HashMap<String, Subscription>();
+            // Capture cluster configuration endpoints to publish and
+            // subscribe/unsubscribe.
+            pubPrefix = cr.getPubPrefix();
+            subRequests = cr.getSubRequests();
+            unsubRequests = cr.getUnsubRequests();
+            closeRequests = cr.getCloseRequests();
 
-        pubAckChan = new LinkedBlockingQueue<PubAck>(opts.getMaxPubAcksInFlight());
+            // Setup the ACK subscription
+            ackSubject = String.format("%s.%s", DEFAULT_ACK_PREFIX, NUID.nextGlobal());
+            ackSubscription = nc.subscribe(ackSubject, new MessageHandler() {
+                public void onMessage(io.nats.client.Message msg) {
+                    processAck(msg);
+                }
+            });
+            ackSubscription.setPendingLimits(1024 ^ 2, 32 * 1024 ^ 2);
+            pubAckMap = new HashMap<String, AckClosure>();
+
+            // Create Subscription map
+            subMap = new HashMap<String, Subscription>();
+
+            pubAckChan = new LinkedBlockingQueue<PubAck>(opts.getMaxPubAcksInFlight());
+        } catch (IOException e) {
+            exThrown = true;
+            throw e;
+        } catch (TimeoutException e) {
+            exThrown = true;
+            if (io.nats.client.Constants.ERR_TIMEOUT.equals(e.getMessage())) {
+                TimeoutException te = new TimeoutException(ERR_CONNECTION_REQ_TIMEOUT);
+                te.initCause(e);
+                throw te;
+            }
+        } finally {
+            if (exThrown) {
+                try {
+                    close();
+                } catch (Exception e2) {
+                    /* NOOP -- can't do anything if close fails */
+                }
+            }
+        }
     }
 
     io.nats.client.ConnectionFactory createNatsConnectionFactory() {
@@ -228,57 +246,64 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
                 logger.debug("stan: NATS connection already closed");
                 return;
             }
-            // if ncOwned, we close it in finally block
 
-            // Signals we are closed.
-            setNatsConnection(null);
+            // Capture for NATS calls below.
+            nc = getNatsConnection();
 
-            // Now close ourselves.
-            if (getAckSubscription() != null) {
-                try {
-                    getAckSubscription().unsubscribe();
-                } catch (Exception e) {
-                    logger.warn("stan: error unsubscribing from acks during connection close");
-                    logger.debug("Full stack trace: ", e);
-                }
-            }
-
-            if (getHbSubscription() != null) {
-                try {
-                    getHbSubscription().unsubscribe();
-                } catch (Exception e) {
-                    logger.warn(
-                            "stan: error unsubscribing from heartbeats during connection close");
-                    logger.debug("Full stack trace: ", e);
-                }
-            }
-
-            CloseRequest req = CloseRequest.newBuilder().setClientID(clientId).build();
-            logger.trace("CLOSE request: [{}]", req);
-            byte[] bytes = req.toByteArray();
-            Message reply = null;
+            // if ncOwned, we close it at the end
             try {
-                reply = nc.request(closeRequests, bytes, opts.getConnectTimeout().toMillis());
-            } catch (TimeoutException e) {
-                throw new TimeoutException(ERR_CLOSE_REQ_TIMEOUT);
-            } catch (Exception e) {
-                throw e;
-            }
-            logger.trace("CLOSE response: [{}]", reply);
-            if (reply.getData() != null) {
-                CloseResponse cr = CloseResponse.parseFrom(reply.getData());
+                // Signals we are closed.
+                setNatsConnection(null);
 
-                if (!cr.getError().isEmpty()) {
-                    throw new IOException(cr.getError());
+                // Now close ourselves.
+                if (getAckSubscription() != null) {
+                    try {
+                        getAckSubscription().unsubscribe();
+                    } catch (Exception e) {
+                        logger.warn("stan: error unsubscribing from acks during connection close");
+                        logger.debug("Full stack trace: ", e);
+                    }
                 }
-            }
-            if (ncOwned) {
+
+                if (getHbSubscription() != null) {
+                    try {
+                        getHbSubscription().unsubscribe();
+                    } catch (Exception e) {
+                        logger.warn(
+                                "stan: error unsubscribing from heartbeats during connection close");
+                        logger.debug("Full stack trace: ", e);
+                    }
+                }
+
+                CloseRequest req = CloseRequest.newBuilder().setClientID(clientId).build();
+                logger.trace("CLOSE request: [{}]", req);
+                byte[] bytes = req.toByteArray();
+                Message reply = null;
                 try {
-                    nc.close();
-                } catch (Exception ignore) {
-                    logger.debug("NATS connection was null in close()");
+                    reply = nc.request(closeRequests, bytes, opts.getConnectTimeout().toMillis());
+                } catch (Exception e) {
+                    if (io.nats.client.Constants.ERR_TIMEOUT.equals(e.getMessage())) {
+                        throw new TimeoutException(ERR_CLOSE_REQ_TIMEOUT);
+                    }
+                    throw e;
                 }
-            }
+                logger.trace("CLOSE response: [{}]", reply);
+                if (reply.getData() != null) {
+                    CloseResponse cr = CloseResponse.parseFrom(reply.getData());
+
+                    if (!cr.getError().isEmpty()) {
+                        throw new IOException(cr.getError());
+                    }
+                }
+            } finally {
+                if (ncOwned) {
+                    try {
+                        nc.close();
+                    } catch (Exception ignore) {
+                        logger.debug("NATS connection was null in close()");
+                    }
+                }
+            } // first finally
         } finally {
             this.unlock();
         }
