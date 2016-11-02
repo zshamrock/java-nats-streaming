@@ -179,7 +179,6 @@ public class ITConnectionTest {
 
     @Test
     public void testNatsConnNotClosedOnClose() throws IOException, TimeoutException {
-
         try (StanServer srv = runServer(clusterName)) {
             // Create a NATS connection
             try (io.nats.client.Connection nc =
@@ -202,16 +201,17 @@ public class ITConnectionTest {
         } // srv
     }
 
-    public StackTraceElement[] getStackTraceByName(String threadName) {
+    public static StackTraceElement[] getStackTraceByName(String threadName) {
         Thread key = getThreadByName(threadName);
         return Thread.getAllStackTraces().get(key);
     }
 
     public static Thread getThreadByName(String threadName) {
         Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
-        for (Thread t : threadSet) {
-            if (t.getName().equals(threadName))
-                return t;
+        for (Thread thd : threadSet) {
+            if (thd.getName().equals(threadName)) {
+                return thd;
+            }
         }
         return null;
     }

@@ -64,7 +64,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
 
         <!-- project-specific plugin versions -->
-        <jnats-version>0.7.1</jnats-version>
+        <jnats-version>0.7.3</jnats-version>
 
         <!-- Used for downloading and installing a server binary for tests -->
         <server.version>0.3.0</server.version>
@@ -429,6 +429,13 @@
                         <!-- <arg>-verbose</arg> -->
                         <arg>-Xlint:all,-options,-path</arg>
                     </compilerArgs>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <configuration>
+                    <tagNameFormat>@{project.version}</tagNameFormat>
                 </configuration>
             </plugin>
         </plugins>

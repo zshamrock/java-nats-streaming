@@ -1,9 +1,15 @@
 Change Log
 ==========
 
+## Version 0.4.1
+
+_2016-11-01_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.4.0...0.4.1)
+ * Bump jnats dependency to `jnats-0.7.3.jar`, which solves a thread exit problem in NATS.
+
+
 ## Version 0.4.0
 _2016-10-30_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.3.0...0.4.0)
- * Bump jnats dependency to `jnats-0.7.1`, thus improving synchronous publish performance significantly.
+ * Bump jnats dependency to `jnats-0.7.1.jar`, thus improving synchronous publish performance significantly.
  * Added benchmark utility to examples.
  * Updated functional/integration test coverage to match `go-nats-streaming` tests.
  * Repository structure changes
