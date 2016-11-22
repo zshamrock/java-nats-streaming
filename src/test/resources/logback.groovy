@@ -21,6 +21,6 @@ appender("STDOUT", ConsoleAppender) {
     pattern = "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
   }
 }
-logger("io.nats.stan", INFO)
+logger("io.nats.streaming", INFO)
 logger("io.nats.client", INFO)
 root(DEBUG, ["STDOUT"])

@@ -10,6 +10,6 @@ SRCDIR=$(cd "$SCRIPTDIR"/.. && pwd)
     mvn -q test-compile
     mvn -q exec:java \
         -Dexec.classpathScope=test \
-        -Dexec.mainClass="io.nats.stan.examples.StanBench" \
+        -Dexec.mainClass="io.nats.streaming.examples.StanBench" \
         -Dexec.args="$*"
 )

@@ -21,4 +21,4 @@ export SLF4J_SIMPLE_LIB=$M2_REPO/org/slf4j/slf4j-simple/${SLF4J_VERSION}/slf4j-s
 
 export CLASSPATH=target/classes:$PROTOBUF_LIB:$JNATS_LIB:$SLF4J_API_LIB:$SLF4J_SIMPLE_LIB
 
-java -cp $CLASSPATH io.nats.stan.examples.Subscriber $*
+java -cp $CLASSPATH io.nats.streaming.examples.Subscriber $*
