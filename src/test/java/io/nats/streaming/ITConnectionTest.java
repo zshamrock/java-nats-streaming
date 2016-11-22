@@ -566,7 +566,7 @@ public class ITConnectionTest {
 
     @Test
     public void testSubscriptionStartAtSequence() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (StanServer ignored = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 // Publish ten messages
                 for (int i = 1; i <= 10; i++) {
@@ -965,10 +965,9 @@ public class ITConnectionTest {
                 assertEquals(nsubs, subs.size());
 
                 // Now unsubscribe them all
-                Iterator<Subscription> it = subs.iterator();
-                while (it.hasNext()) {
+                for (Subscription sub : subs) {
                     try {
-                        it.next().unsubscribe();
+                        sub.unsubscribe();
                     } catch (Exception e) {
                         e.printStackTrace();
                         fail(e.getMessage());
@@ -1141,10 +1140,9 @@ public class ITConnectionTest {
 
                     // Now make sure we get the rest of them. So ack the ones we
                     // have so far.
-                    Iterator<Message> it = msgs.iterator();
-                    while (it.hasNext()) {
+                    for (Message msg : msgs) {
                         try {
-                            it.next().ack();
+                            msg.ack();
                         } catch (Exception e) {
                             e.printStackTrace();
                             fail("Unexpected exception on Ack: " + e.getMessage());

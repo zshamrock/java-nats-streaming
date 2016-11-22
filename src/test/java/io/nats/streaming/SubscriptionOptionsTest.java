@@ -160,6 +160,7 @@ public class SubscriptionOptionsTest {
                 new SubscriptionOptions.Builder().startAtTimeDelta(delta, unit).build();
         Instant expected = Instant.now().minusMillis(delta);
         assertEquals(StartPosition.TimeDeltaStart, opts.getStartAt());
+        String.format("Start time: expected %s but was %s", opts.getStartTime(), expected);
         assertTrue(opts.getStartTime().equals(expected));
     }
 
