@@ -1,19 +1,21 @@
-<?xml version="1.0" encoding="UTF-8"?><!-- Copyright (c) 2015-2016 Apcera 
-    Inc. All rights reserved. This program and the accompanying materials are 
-    made available under the terms of the MIT License (MIT) which accompanies 
-    this distribution, and is available at http://opensource.org/licenses/MIT -->
+<?xml version="1.0" encoding="UTF-8"?><!--
+  ~  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+  ~  materials are made available under the terms of the MIT License (MIT) which accompanies this
+  ~  distribution, and is available at http://opensource.org/licenses/MIT
+  -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.nats</groupId>
         <artifactId>nats-parent</artifactId>
-        <version>1.8</version>
+        <version>1.12</version>
     </parent>
 
     <groupId>io.nats</groupId>
     <artifactId>java-nats-streaming</artifactId>
-    <version>0.4.2-SNAPSHOT</version>
+    <version>0.5.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
     <name>java-nats-streaming</name>
@@ -64,7 +66,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
 
         <!-- project-specific plugin versions -->
-        <jnats-version>0.7.3</jnats-version>
+        <java-nats-version>1.0-SNAPSHOT</java-nats-version>
 
         <!-- Used for downloading and installing a server binary for tests -->
         <server.version>0.3.0</server.version>
@@ -80,7 +82,7 @@
         <dependency>
             <groupId>io.nats</groupId>
             <artifactId>jnats</artifactId>
-            <version>${jnats-version}</version>
+            <version>${java-nats-version}</version>
         </dependency>
         <dependency>
             <groupId>com.google.protobuf</groupId>
@@ -114,7 +116,7 @@
         </dependency>
         <dependency>
             <groupId>org.codehaus.groovy</groupId>
-            <artifactId>groovy</artifactId>
+            <artifactId>groovy-all</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -275,7 +277,7 @@
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
                             <!-- Exclude protobuf-generated sources -->
                             <excludes>
-                                <exclude>io/nats/stan/protobuf/*.class</exclude>
+                                <exclude>io/nats/streaming/protobuf/*.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -313,7 +315,7 @@
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco-it</outputDirectory>
                             <!-- Exclude protobuf-generated sources -->
                             <excludes>
-                                <exclude>io/nats/stan/protobuf/*.class</exclude>
+                                <exclude>io/nats/streaming/protobuf/*.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -344,7 +346,7 @@
                         </goals>
                         <configuration>
                             <skip>${skip.unit.tests}</skip>
-                            <groups>io.nats.stan.UnitTest</groups>
+                            <groups>io.nats.streaming.UnitTest</groups>
                         </configuration>
                     </execution>
                 </executions>
@@ -400,7 +402,7 @@
                         <javadocDirectory>${basedir}/src/main/javadoc</javadocDirectory> -->
                     <docfilessubdirs>true</docfilessubdirs>
                     <additionalJOption>-J-Xmx1024m</additionalJOption>
-                    <excludePackageNames>io.nats.stan.protobuf</excludePackageNames>
+                    <excludePackageNames>io.nats.streaming.protobuf</excludePackageNames>
                 </configuration>
                 <executions>
                     <execution>
@@ -494,7 +496,7 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
-                            <groups>io.nats.stan.BenchmarkTest</groups>
+                            <groups>io.nats.streaming.BenchmarkTest</groups>
                         </configuration>
                     </plugin>
                 </plugins>

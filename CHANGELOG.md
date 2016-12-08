@@ -1,6 +1,14 @@
 Change Log
 ==========
 
+## Version 0.5.0-SNAPSHOT
+_2016-11-01_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.4.1...HEAD)
+ * [ADDED] Simplified connect API (See `NatsStreaming.connect(...)`)
+ * [ADDED] `Subscription::close(boolean unsubscribe)` to allow durable subscribers to close without unsubscribing.
+ * [CHANGED] Top-level package is now `io.nats.streaming` (vs. `io.nats.stan`)
+ * [CHANGED] Methods that used to throw TimeoutException will return `null` instead, if they have non-void return types.
+ * Miscellaneous FindBugs, PMD and style fixes
+ 
 ## Version 0.4.1
 
 _2016-11-01_    [GitHub Diff](https://github.com/nats-io/java-nats-streaming/compare/0.4.0...0.4.1)
