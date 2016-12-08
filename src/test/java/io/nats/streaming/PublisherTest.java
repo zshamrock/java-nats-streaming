@@ -1,3 +1,9 @@
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
+
 package io.nats.streaming;
 
 import static io.nats.streaming.UnitTestUtilities.runServer;
@@ -58,7 +64,7 @@ public class PublisherTest {
         String[] args = new String[argList.size()];
         args = argList.toArray(args);
 
-        try (StanServer srv = runServer(clusterId)) {
+        try (NatsStreamingServer srv = runServer(clusterId)) {
             new Publisher(args).run();
         }
     }
@@ -74,7 +80,7 @@ public class PublisherTest {
         String[] args = new String[argList.size()];
         args = argList.toArray(args);
 
-        try (StanServer srv = runServer(clusterId)) {
+        try (NatsStreamingServer srv = runServer(clusterId)) {
             new Publisher(args).run();
         }
     }
@@ -125,14 +131,14 @@ public class PublisherTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testMainFails() throws Exception {
-        try (StanServer srv = runServer(clusterId)) {
+        try (NatsStreamingServer srv = runServer(clusterId)) {
             Publisher.main(new String[] { "foobar" });
         }
     }
 
     @Test
     public void testMainSuccess() throws Exception {
-        try (StanServer srv = runServer(clusterId)) {
+        try (NatsStreamingServer srv = runServer(clusterId)) {
             Publisher.main(new String[] { "-c", clusterId, "foo", "bar" });
         }
     }

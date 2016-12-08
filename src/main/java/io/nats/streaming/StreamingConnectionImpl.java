@@ -1,12 +1,13 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
 import static io.nats.streaming.NatsStreaming.ERR_CONNECTION_REQ_TIMEOUT;
+import static io.nats.streaming.NatsStreaming.ERR_SUB_REQ_TIMEOUT;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -207,8 +208,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         this.lock();
         try {
             // Capture for NATS calls below
-            nc = getNatsConnection();
-            if (nc == null) {
+            if (getNatsConnection() == null) {
                 // We are already closed
                 logger.debug("stan: NATS connection already closed");
                 return;
@@ -227,8 +227,8 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
                     try {
                         getAckSubscription().unsubscribe();
                     } catch (Exception e) {
-                        logger.warn("stan: error unsubscribing from acks during connection close");
-                        logger.debug("Full stack trace: ", e);
+                        logger.debug(
+                                "stan: error unsubscribing from acks ('{}')", e.getMessage(), e);
                     }
                 }
 
@@ -236,10 +236,8 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
                     try {
                         getHbSubscription().unsubscribe();
                     } catch (Exception e) {
-                        logger.warn(
-                                "stan: error unsubscribing from heartbeats during connection " +
-                                        "close");
-                        logger.debug("Full stack trace: ", e);
+                        logger.debug("stan: error unsubscribing from heartbeats ('{}')",
+                                e.getMessage(), e);
                     }
                 }
 
@@ -456,7 +454,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
             reply = nc.request(subRequests, sr.toByteArray(), 2L, TimeUnit.SECONDS);
             if (reply == null) {
                 sub.inboxSub.unsubscribe();
-                throw new IOException(Nats.ERR_TIMEOUT);
+                throw new IOException(ERR_SUB_REQ_TIMEOUT);
             }
 
             SubscriptionResponse response = null;
@@ -709,21 +707,19 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         return nc.newInbox();
     }
 
-    protected void lock() {
+    void lock() {
         mu.writeLock().lock();
     }
 
-    protected void unlock() {
+    void unlock() {
         mu.writeLock().unlock();
     }
 
-    protected void rLock() {
-        mu.writeLock().lock();
+    void rLock() {
+        mu.readLock().lock();
     }
 
-    protected void rUnlock() {
-        mu.writeLock().unlock();
-    }
+    void rUnlock() { mu.readLock().unlock(); }
 
     protected io.nats.client.Subscription getAckSubscription() {
         return this.ackSubscription;
@@ -759,7 +755,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     }
 
     class AckClosure {
-        protected TimerTask ackTask;
+        TimerTask ackTask;
         AckHandler ah;
         BlockingQueue<String> ch;
 

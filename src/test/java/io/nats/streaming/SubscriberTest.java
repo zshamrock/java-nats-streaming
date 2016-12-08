@@ -1,3 +1,9 @@
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
+
 package io.nats.streaming;
 
 import static io.nats.streaming.NatsStreaming.ERR_CONNECTION_REQ_TIMEOUT;
@@ -28,7 +34,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeoutException;
 
 @Category(IntegrationTest.class)
 public class SubscriberTest {
@@ -117,7 +122,7 @@ public class SubscriberTest {
 
     @Test(timeout = 5000)
     public void testMainSuccess() throws Exception {
-        try (StanServer srv = runServer(testClusterName)) {
+        try (NatsStreamingServer srv = runServer(testClusterName)) {
             Publisher.main(new String[] { "-c", clusterId, "foo", "bar" });
             Subscriber.main(new String[] { "-c", clusterId, "--all", "--count", "1", "foo" });
         }
@@ -134,7 +139,7 @@ public class SubscriberTest {
     public void testMainFailsTimeout() throws Exception {
         thrown.expect(IOException.class);
         thrown.expectMessage(ERR_CONNECTION_REQ_TIMEOUT);
-        try (StanServer srv = runServer(testClusterName)) {
+        try (NatsStreamingServer srv = runServer(testClusterName)) {
             Subscriber.main(new String[] {"-c", "nonexistent-cluster", "foobar"});
         }
     }

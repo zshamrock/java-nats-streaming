@@ -1,13 +1,17 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import ch.qos.logback.classic.Level;
@@ -16,10 +20,12 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.Appender;
 
+import java.util.ArrayList;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.verification.VerificationMode;
 import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
@@ -49,93 +55,65 @@ public class LogVerifier {
     }
 
     void verifyLogMsgEquals(Level level, String msg) {
-        // Now verify our logging interactions
-        List<LoggingEvent> events = captorLoggingEvent.getAllValues();
-        if (events.size() > 1) {
-            System.err.println("Captured logging events: ");
-            for (Iterator<LoggingEvent> it = events.iterator(); it.hasNext();) {
-                LoggingEvent ev = it.next();
-                System.err.println(ev);
-            }
-        }
-        verify(mockAppender).doAppend(captorLoggingEvent.capture());
-        // verify(mockAppender).doAppend(events.get(events.size()));
-        // Having a genricised captor means we don't need to cast
-        final LoggingEvent loggingEvent = captorLoggingEvent.getValue();
-        // Check log level is correct
-        assertEquals(level, loggingEvent.getLevel());
-        // Check the message being logged is correct
-        assertEquals(msg, loggingEvent.getFormattedMessage());
+        verifyLogMsg(level, msg, true, times(1));
     }
+
+    void verifyLogMsgEquals(Level level, String msg, VerificationMode mode) {
+        verifyLogMsg(level, msg, true, mode);
+    }
+
 
     void verifyLogMsgMatches(Level level, String msg) {
-        // Now verify our logging interactions
-        List<LoggingEvent> events = captorLoggingEvent.getAllValues();
-        if (events.size() > 1) {
-            System.err.println("Captured logging events: ");
-            for (Iterator<LoggingEvent> it = events.iterator(); it.hasNext();) {
-                LoggingEvent ev = it.next();
-                System.err.println(ev);
-            }
-        }
-        verify(mockAppender).doAppend(captorLoggingEvent.capture());
-        // verify(mockAppender).doAppend(events.get(events.size()));
-        // Having a genricised captor means we don't need to cast
-        final LoggingEvent loggingEvent = captorLoggingEvent.getValue();
-        // Check log level is correct
-        assertEquals(level, loggingEvent.getLevel());
-        // Check the message being logged is correct
-        // assertTrue(loggingEvent.getFormattedMessage().startsWith(msg));
-        assertTrue(Pattern.matches(msg, loggingEvent.getFormattedMessage()));
+        verifyLogMsg(level, msg, false, times(1));
     }
 
-    // @Test
-    // public void testSomething() {
-    // Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    // final Appender<ILoggingEvent> mockAppender = mock(Appender.class);
-    // when(mockAppender.getName()).thenReturn("MOCK");
-    // root.addAppender(mockAppender);
-    //
-    // // ... do whatever you need to trigger the log
-    //
-    // verify(mockAppender).doAppend((ILoggingEvent) argThat(new ArgumentMatcher() {
-    // @Override
-    // public boolean matches(final Object argument) {
-    // return ((LoggingEvent) argument).getFormattedMessage()
-    // .contains("Hey this is the message I want to see");
-    // }
-    // }));
-    // }
-    //
-    // @Test
-    // public void shouldConcatAndLog() {
-    // // given
-    // ExampleThatLogs example = new ExampleThatLogs();
-    // // when
-    // final String result = example.concat("foo", "bar");
-    // // then
-    // assertEquals("foobar", result);
-    //
-    // // Now verify our logging interactions
-    // verify(mockAppender).doAppend(captorLoggingEvent.capture());
-    // // Having a genricised captor means we don't need to cast
-    // final LoggingEvent loggingEvent = captorLoggingEvent.getValue();
-    // // Check log level is correct
-    // assertEquals(Level.INFO, loggingEvent.getLevel());
-    // // Check the message being logged is correct
-    // assertEquals("String a:foo, String b:bar", loggingEvent.getFormattedMessage());
-    // }
-    //
-    // /**
-    // * Simple class that we use to trigger a log statement.
-    // */
-    // public class ExampleThatLogs {
-    //
-    // private final Logger LOG = (Logger) LoggerFactory.getLogger(ExampleThatLogs.class);
-    //
-    // public String concat(String a, String b) {
-    // LOG.info("String a:" + a + ", String b:" + b);
-    // return a + b;
-    // }
-    // }
+    void verifyLogMsg(Level level, String pattern, boolean exact, VerificationMode mode) {
+        // Now verify our logging interactions
+        verify(mockAppender, mode).doAppend(captorLoggingEvent.capture());
+        List<LoggingEvent> events = captorLoggingEvent.getAllValues();
+        List<LoggingEvent> matches = new ArrayList<>();
+        for (LoggingEvent ev : events) {
+            boolean matched = ev.getLevel().equals(level);
+            if (matched && exact) {
+                matched = ev.getFormattedMessage().equals(pattern);
+            } else if (matched) {
+                matched = Pattern.matches(pattern, ev.getFormattedMessage());
+            }
+
+            if (matched) {
+                matches.add(ev);
+            }
+        }
+        boolean success = false;
+        String err = null;
+        switch (matches.size()) {
+            case 0:
+                err = String.format("No matching event(s) found for Level=%s, Message='%s'",
+                        level, pattern);
+                break;
+            case 1:
+                success = true;
+                break;
+            default:
+                err = "Too many messages";
+                success = (mode == atLeastOnce());
+                break;
+        }
+        if (!success) {
+            if (events.size() > 0) {
+                System.err.printf("%s\nFound these events:\n\n", err);
+                printLoggingEvents(events);
+            }
+            fail(err);
+        }
+    }
+
+    void printLoggingEvents(List<LoggingEvent> events) {
+        List<LoggingEvent> matches = new ArrayList<>();
+        for (LoggingEvent ev : events) {
+            System.err.printf("[%s] %s\n", ev.getLevel(), ev.getFormattedMessage());
+        }
+    }
+
+
 }

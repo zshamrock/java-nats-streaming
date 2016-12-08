@@ -1,7 +1,9 @@
-<?xml version="1.0" encoding="UTF-8"?><!-- Copyright (c) 2015-2016 Apcera 
-    Inc. All rights reserved. This program and the accompanying materials are 
-    made available under the terms of the MIT License (MIT) which accompanies 
-    this distribution, and is available at http://opensource.org/licenses/MIT -->
+<?xml version="1.0" encoding="UTF-8"?><!--
+  ~  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+  ~  materials are made available under the terms of the MIT License (MIT) which accompanies this
+  ~  distribution, and is available at http://opensource.org/licenses/MIT
+  -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
@@ -275,7 +277,7 @@
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
                             <!-- Exclude protobuf-generated sources -->
                             <excludes>
-                                <exclude>io/nats/stan/protobuf/*.class</exclude>
+                                <exclude>io/nats/streaming/protobuf/*.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -313,7 +315,7 @@
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco-it</outputDirectory>
                             <!-- Exclude protobuf-generated sources -->
                             <excludes>
-                                <exclude>io/nats/stan/protobuf/*.class</exclude>
+                                <exclude>io/nats/streaming/protobuf/*.class</exclude>
                             </excludes>
                         </configuration>
                     </execution>

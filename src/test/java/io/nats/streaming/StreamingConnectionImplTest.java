@@ -1,8 +1,8 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
@@ -33,6 +33,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 import io.nats.client.NUID;
 import io.nats.client.Nats;
 import io.nats.streaming.StreamingConnectionImpl.AckClosure;
@@ -43,27 +47,6 @@ import io.nats.streaming.protobuf.PubAck;
 import io.nats.streaming.protobuf.StartPosition;
 import io.nats.streaming.protobuf.SubscriptionRequest;
 import io.nats.streaming.protobuf.SubscriptionResponse;
-
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-
-import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
-
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.ExpectedException;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
@@ -75,13 +58,26 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.slf4j.LoggerFactory;
 
 @Category(UnitTest.class)
 public class StreamingConnectionImplTest {
     static final Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    static final Logger logger = (Logger) LoggerFactory.getLogger(StreamingConnectionImplTest.class);
+    static final Logger logger = (Logger) LoggerFactory.getLogger(StreamingConnectionImplTest
+            .class);
 
-    static final LogVerifier verifier = new LogVerifier();
+    private static final LogVerifier verifier = new LogVerifier();
 
     @Rule
     public ExpectedException thrown = ExpectedException.none();
@@ -99,10 +95,12 @@ public class StreamingConnectionImplTest {
     Map<String, Subscription> subMapMock;
 
     @BeforeClass
-    public static void setUpBeforeClass() throws Exception {}
+    public static void setUpBeforeClass() throws Exception {
+    }
 
     @AfterClass
-    public static void tearDownAfterClass() throws Exception {}
+    public static void tearDownAfterClass() throws Exception {
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -133,61 +131,74 @@ public class StreamingConnectionImplTest {
     @Test
     public void testConnectionImplOptions() {
         Options opts = new Options.Builder().pubAckWait(Duration.ofSeconds(555)).build();
-        StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName, testClientName, opts);
+        StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName,
+                testClientName, opts);
         assertNotNull(conn);
         assertEquals(555, conn.opts.getAckTimeout().getSeconds());
     }
 
     @Test
     public void testConnectionImplOptionsNull() {
-        StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName, testClientName, null);
+        StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName,
+                testClientName, null);
         assertNotNull(conn);
         assertEquals(Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT),
                 conn.opts.getAckTimeout());
     }
 
     @Test
-    public void testConnectSuccess() {
+    public void testConnectSuccess() throws Exception {
         try (io.nats.client.Connection nconn = setupMockNatsConnection()) {
             assertNotNull(nconn);
             assertFalse(nconn.isClosed());
             Options opts = new Options.Builder().natsConn(nconn).build();
             assertNotNull(opts.getNatsConn());
-            try (StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName, testClientName, opts)) {
+            try (StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName,
+                    testClientName, opts)) {
                 assertNotNull(conn);
                 assertNotNull(conn.nc);
                 conn.connect();
-            } catch (Exception e) {
-                e.printStackTrace();
-                fail(e.getMessage());
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            fail(e.getMessage());
         }
     }
 
     /*
      * Tests that connect() will correctly create a NATS connection if needed.
      */
-    //TODO reimplement this
-//    @Test
-//    public void testConnectSuccessInternalNats() {
-//        try {
-//            io.nats.client.StreamingConnectionFactory ncf = mock(io.nats.client.StreamingConnectionFactory.class);
-//            io.nats.client.Connection nc = setupMockNatsConnection();
-//            StreamingConnectionImpl conn = Mockito.spy(new StreamingConnectionImpl(testClusterName, testClientName));
-//            assertNotNull(conn);
-//            when(conn.createNatsConnectionFactory()).thenReturn(ncf);
-//            when(ncf.createConnection()).thenReturn(nc);
-//            conn.connect();
+    @Test
+    public void testConnectSuccessInternalNats() throws Exception {
+        try (io.nats.client.Connection nc = setupMockNatsConnection()) {
+            Options opts = new Options.Builder().build();
+            StreamingConnectionImpl conn = spy(new StreamingConnectionImpl
+                    (testClusterName, testClientName, opts));
+            assertNull(conn.nc);
+            doReturn(nc).when(conn).createNatsConnection();
+            conn.connect();
+            assertNotNull(conn);
+            verify(conn).createNatsConnection();
 //            assertNotNull(conn.nc);
-//            assertEquals(nc, conn.getNatsConnection());
-//        } catch (IOException | TimeoutException e) {
-//            e.printStackTrace();
-//            fail(e.getMessage());
-//        }
-//    }
+            assertEquals(nc, conn.getNatsConnection());
+        }
+    }
+
+    /*
+ * Tests that connect() will correctly create a NATS connection if needed.
+ */
+    @Test
+    public void testConnectFailureExternalNats() throws Exception {
+        thrown.expect(IOException.class);
+        thrown.expectMessage(NatsStreaming.ERR_BAD_CONNECTION);
+
+        try (io.nats.client.Connection nc = setupMockNatsConnection()) {
+            Options opts = new Options.Builder().natsConn(nc).build();
+            StreamingConnectionImpl conn = spy(new StreamingConnectionImpl
+                    (testClusterName, testClientName, opts));
+            assertNotNull(conn.nc);
+            doReturn(false).when(nc).isConnected();
+            conn.connect();
+            fail("Should not have connected");
+        }
+    }
 
     /**
      * Tests for IOException when ConnectResponse contains a non-empty error.
@@ -200,13 +211,15 @@ public class StreamingConnectionImplTest {
                     String.format("%s.%s", NatsStreaming.DEFAULT_DISCOVER_PREFIX, testClusterName);
             ConnectResponse cr =
                     ConnectResponse.newBuilder().setError("stan: this is a fake error").build();
-            io.nats.client.Message raw = new io.nats.client.Message("foo", "bar", cr.toByteArray());
+            io.nats.client.Message raw = new io.nats.client.Message("foo", "bar",
+                    cr.toByteArray());
             when(nconn.request(eq(discoverSubject), any(byte[].class), any(long.class)))
                     .thenReturn(raw);
 
             Options opts = new Options.Builder().natsConn(nconn).build();
             boolean exThrown = false;
-            try (StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName, testClientName, opts)) {
+            try (StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName,
+                    testClientName, opts)) {
                 conn.connect();
             } catch (Exception e) {
                 assertTrue("Wrong exception type: " + e.getClass().getName(),
@@ -232,7 +245,8 @@ public class StreamingConnectionImplTest {
 
             Options opts = new Options.Builder().natsConn(nconn).build();
             boolean exThrown = false;
-            try (StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName, testClientName, opts)) {
+            try (StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName,
+                    testClientName, opts)) {
                 conn.connect();
             } catch (Exception e) {
                 assertTrue("Wrong exception type: " + e.getClass().getName(),
@@ -300,7 +314,8 @@ public class StreamingConnectionImplTest {
 
         // Make sure the NATS connection is the one that was passed in
         Options opts = new Options.Builder().natsConn(nc).build();
-        StreamingConnection sc = new StreamingConnectionImpl("foo", "bar", opts);
+        StreamingConnection sc = new StreamingConnectionImpl("foo", "bar",
+                opts);
         assertEquals(nc, sc.getNatsConnection());
 
         // Make sure the NATS connection is null (since it won't have been created yet)
@@ -381,14 +396,16 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testCloseAckUnsubscribeFailure() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             assertNotNull(conn);
             io.nats.client.Subscription mockSub = mock(io.nats.client.Subscription.class);
             when(conn.getAckSubscription()).thenReturn(mockSub);
-            doThrow(new IOException("fake I/O exception")).when(mockSub).unsubscribe();
+            doThrow(new IOException(Nats.ERR_CONNECTION_CLOSED)).when(mockSub).unsubscribe();
+            setLogLevel(Level.DEBUG);
             conn.close();
-            verifier.verifyLogMsgEquals(Level.WARN,
-                    "stan: error unsubscribing from acks during connection close");
+            String expected = String.format("stan: error unsubscribing from acks.+");
+            verifier.verifyLogMsgMatches(Level.DEBUG, expected);
             assertNull(conn.nc);
         } catch (Exception e) {
             e.printStackTrace();
@@ -398,14 +415,17 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testCloseHbUnsubscribeFailure() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             assertNotNull(conn);
             io.nats.client.Subscription mockSub = mock(io.nats.client.Subscription.class);
             when(conn.getHbSubscription()).thenReturn(mockSub);
-            doThrow(new IOException("fake I/O exception")).when(mockSub).unsubscribe();
+            doThrow(new IllegalStateException(Nats.ERR_CONNECTION_CLOSED)).when(mockSub)
+                    .unsubscribe();
+            setLogLevel(Level.DEBUG);
             conn.close();
-            verifier.verifyLogMsgEquals(Level.WARN,
-                    "stan: error unsubscribing from heartbeats during connection close");
+            String expected = String.format("stan: error unsubscribing from heartbeats.+");
+            verifier.verifyLogMsgMatches(Level.DEBUG, expected);
             assertNull(conn.nc);
         } catch (Exception e) {
             e.printStackTrace();
@@ -415,7 +435,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testCloseAckSubscriptionNull() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             when(conn.getAckSubscription()).thenReturn(null);
             conn.close();
             assertNull(conn.nc);
@@ -427,7 +448,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testCloseHbSubscriptionNull() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             when(conn.getHbSubscription()).thenReturn(null);
             conn.close();
             assertNull(conn.nc);
@@ -442,7 +464,8 @@ public class StreamingConnectionImplTest {
         thrown.expect(IOException.class);
         thrown.expectMessage(ERR_CLOSE_REQ_TIMEOUT);
 
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             doReturn(null).when(conn.nc)
                     .request(eq(conn.closeRequests), any(byte[].class), any(long.class));
 //            conn.close();
@@ -451,7 +474,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testCloseRequestIoError() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection(true))) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection(true))) {
             doThrow(new IOException("TEST")).when(conn.nc).request(eq(conn.closeRequests),
                     any(byte[].class), any(long.class));
             assertTrue(conn.ncOwned);
@@ -474,12 +498,14 @@ public class StreamingConnectionImplTest {
     @Test
     public void testCloseResponseErrorThrows() throws Exception {
         final String errorText = "TEST";
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             // Close response has non-empty error
             CloseResponse closeResponseProto =
                     CloseResponse.newBuilder().setError(errorText).build();
             io.nats.client.Message closeResponse =
-                    new io.nats.client.Message("foo", "bar", closeResponseProto.toByteArray());
+                    new io.nats.client.Message("foo", "bar",
+                            closeResponseProto.toByteArray());
             when(conn.nc.request(eq(conn.closeRequests), any(byte[].class), any(long.class)))
                     .thenReturn(closeResponse);
 
@@ -501,8 +527,10 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testCloseResponseNullPayload() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
-            io.nats.client.Message closeResponse = new io.nats.client.Message("foo", "bar", null);
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
+            io.nats.client.Message closeResponse = new io.nats.client.Message("foo",
+                    "bar", null);
             when(conn.nc.request(eq(conn.closeRequests), any(byte[].class), any(long.class)))
                     .thenReturn(closeResponse);
 
@@ -556,7 +584,8 @@ public class StreamingConnectionImplTest {
         thrown.expect(IOException.class);
         String subj = "testPublishStringByteArrayThrowsEx";
         byte[] payload = "Hello World".getBytes();
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             @SuppressWarnings("unchecked")
             SynchronousQueue<String> mockCh =
                     (SynchronousQueue<String>) mock(SynchronousQueue.class);
@@ -602,7 +631,8 @@ public class StreamingConnectionImplTest {
     public void testPublishAsyncIllegalAckTimeoutValue() throws Exception {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage("Negative delay.");
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
             ac.ah = mock(AckHandler.class);
@@ -620,7 +650,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void test_SubscribeNullNatsConnection() {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             io.nats.client.Connection oldNc = conn.nc;
             boolean exThrown = false;
             try {
@@ -642,21 +673,25 @@ public class StreamingConnectionImplTest {
     @Test
     public void testSubscriptionRequestTimeout() throws Exception {
         thrown.expect(IOException.class);
-        thrown.expectMessage(Nats.ERR_TIMEOUT);
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        thrown.expectMessage(NatsStreaming.ERR_SUB_REQ_TIMEOUT);
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             doReturn(null).when(conn.nc).request(eq(conn.subRequests),
                     any(byte[].class), any(long.class), any(TimeUnit.class));
             conn.subscribe("foo", null);
-            verify(conn.nc, times(1)).request(eq(conn.subRequests), any(byte[].class), any(long.class), any(TimeUnit.class));
+            verify(conn.nc, times(1)).request(eq(conn.subRequests),
+                    any(byte[].class), any(long.class), any(TimeUnit.class));
         }
     }
 
     @Test
     public void testBasicSubscribeSuccess() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             conn.subscribe("foobar", null);
 
-            conn.subscribe("foobar2", "bar", msg -> {});
+            conn.subscribe("foobar2", "bar", msg -> {
+            });
         }
     }
 
@@ -672,7 +707,8 @@ public class StreamingConnectionImplTest {
     public void testBasicSubscribeProtoUnmarshalError() throws Exception {
         thrown.expect(IOException.class);
         thrown.expectMessage("stan: bad request");
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             SubscriptionResponse subRespProto =
                     SubscriptionResponse.newBuilder().setError("stan: bad request").build();
             io.nats.client.Message rawSubResponse =
@@ -687,7 +723,8 @@ public class StreamingConnectionImplTest {
     public void testBasicSubscribeProtoResponseError() throws Exception {
         thrown.expect(InvalidProtocolBufferException.class);
         // thrown.expectMessage("stan: bad request");
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             byte[] payload = "Junk".getBytes();
             io.nats.client.Message rawSubResponse =
                     new io.nats.client.Message("foo", "bar", payload);
@@ -699,7 +736,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testSubscriptionStartAt() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             io.nats.client.Connection nc = conn.nc;
             SubscriptionOptions opts;
 
@@ -789,7 +827,8 @@ public class StreamingConnectionImplTest {
     public void testSubscribeBadStartPosition() throws Exception {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage("Can't get the number of an unknown enum value.");
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             SubscriptionOptions subOpts = new SubscriptionOptions.Builder().build();
             subOpts.startAt = StartPosition.UNRECOGNIZED;
             conn.subscribe("foo", "bar", null, subOpts).close();
@@ -798,7 +837,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testProcessAckSuccess() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
             ac.ah = mock(AckHandler.class);
@@ -814,7 +854,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testProcessAckNullAckClosure() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
             ac.ah = null;
@@ -831,7 +872,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testProcessAckNullAckHandler() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
             ac.ah = null;
@@ -848,7 +890,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testProcessAckTimeoutMethod() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckClosure ac = mock(AckClosure.class);
             AckHandler ahMock = mock(AckHandler.class);
@@ -877,7 +920,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testProcessAckUnmarshalError() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             String guid = NUID.nextGlobal();
             AckHandler ah = mock(AckHandler.class);
             BlockingQueue<String> ch = new LinkedBlockingQueue<>();
@@ -895,7 +939,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testProcessAckNonEmptyErrorField() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             final String guid = NUID.nextGlobal();
             @SuppressWarnings("unchecked")
             LinkedBlockingQueue<String> ch =
@@ -912,7 +957,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testProcessAckNonEmptyErrorFieldWithAckHandler() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             final String guid = NUID.nextGlobal();
             AckHandler ah = mock(AckHandler.class);
             @SuppressWarnings("unchecked")
@@ -930,7 +976,8 @@ public class StreamingConnectionImplTest {
 
     @Test
     public void testProcessAckErrChanPutInterrupted() throws Exception {
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             final String guid = NUID.nextGlobal();
             @SuppressWarnings("unchecked")
             BlockingQueue<String> ch = (BlockingQueue<String>) mock(BlockingQueue.class);
@@ -1110,7 +1157,8 @@ public class StreamingConnectionImplTest {
     public void testOnMessage() throws Exception {
         // This tests the NATS message handler installed on the STAN connection
         io.nats.client.Message msg = new io.nats.client.Message();
-        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
 
             MsgProto msgp = MsgProto.newBuilder().setSubject("foo").setReply("bar").build();
             msg.setSubject("foo");
@@ -1127,7 +1175,8 @@ public class StreamingConnectionImplTest {
     @Test
     public void testProcessMsgBasicSuccess() throws Exception {
         String subject = "foo";
-        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             MessageHandler mockCb = mock(MessageHandler.class);
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
@@ -1156,7 +1205,8 @@ public class StreamingConnectionImplTest {
     @Test
     public void testProcessMsgRuntimeExceptions() throws Exception {
         String subject = "foo";
-        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             conn.setSubMap(subMapMock);
             assertEquals(subMapMock, conn.getSubMap());
             MessageHandler mockCb = mock(MessageHandler.class);
@@ -1202,7 +1252,8 @@ public class StreamingConnectionImplTest {
     @Test
     public void testProcessMsgManualAck() throws Exception {
         String subject = "foo";
-        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", NatsStreaming.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1230,7 +1281,8 @@ public class StreamingConnectionImplTest {
     @Test
     public void testProcessMsgNullNatsConnectionReturnsEarly() throws Exception {
         String subject = "foo";
-        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", NatsStreaming.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1267,7 +1319,8 @@ public class StreamingConnectionImplTest {
     @Test
     public void testProcessMsgSubConnIsNull() throws Exception {
         String subject = "foo";
-        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", NatsStreaming.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1299,7 +1352,8 @@ public class StreamingConnectionImplTest {
     @Test
     public void testProcessMsgSubNatsConnIsNull() throws Exception {
         String subject = "foo";
-        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", NatsStreaming.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1330,7 +1384,8 @@ public class StreamingConnectionImplTest {
     @Test
     public void testProcessMsgSubCbIsNull() throws Exception {
         String subject = "foo";
-        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) Mockito.spy(newMockedConnection())) {
+        try (final StreamingConnectionImpl conn = (StreamingConnectionImpl) spy
+                (newMockedConnection())) {
             SubscriptionImpl mockSub = mock(SubscriptionImpl.class);
             String ackSubject =
                     String.format("%s.%s", NatsStreaming.DEFAULT_ACK_PREFIX, NUID.nextGlobal());
@@ -1411,7 +1466,8 @@ public class StreamingConnectionImplTest {
     public void testSetupMockNatsConnection() throws Exception {
         try (io.nats.client.Connection nc = setupMockNatsConnection()) {
             Options opts = new Options.Builder().natsConn(nc).build();
-            try (StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName, testClientName, opts)) {
+            try (StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName,
+                    testClientName, opts)) {
                 conn.connect();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -1431,7 +1487,7 @@ public class StreamingConnectionImplTest {
             public void onAck(String nuid, Exception ex) {
                 assertEquals(guid, nuid);
                 assertTrue(ex instanceof TimeoutException);
-                assertEquals(NatsStreaming.SERVER_ERR_TIMEOUT, ex.getMessage());
+                assertEquals(NatsStreaming.ERR_TIMEOUT, ex.getMessage());
                 latch.countDown();
             }
         };
@@ -1464,7 +1520,7 @@ public class StreamingConnectionImplTest {
     @Test
     public void testCreateNatsConnection() throws Exception {
         Options opts = new io.nats.streaming.Options.Builder().natsUrl(null).build();
-        StreamingConnectionImpl conn = Mockito.spy(new StreamingConnectionImpl("foo", "bar", opts));
+        StreamingConnectionImpl conn = spy(new StreamingConnectionImpl("foo", "bar", opts));
         io.nats.client.Connection nc = mock(io.nats.client.Connection.class);
         assertNotNull(nc);
         when(conn.getNatsConnection()).thenReturn(nc);

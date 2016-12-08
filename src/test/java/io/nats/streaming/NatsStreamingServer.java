@@ -1,8 +1,8 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-class StanServer implements Runnable, AutoCloseable {
+class NatsStreamingServer implements Runnable, AutoCloseable {
     static final String STAN_SERVER = "nats-streaming-server";
 
     // Enable this for additional server debugging info.
@@ -51,23 +51,23 @@ class StanServer implements Runnable, AutoCloseable {
         }
     }
 
-    public StanServer() {
+    public NatsStreamingServer() {
         this(null, -1, false);
     }
 
-    public StanServer(String id) {
+    public NatsStreamingServer(String id) {
         this(id, -1, false);
     }
 
-    public StanServer(boolean debug) {
+    public NatsStreamingServer(boolean debug) {
         this(null, -1, debug);
     }
 
-    public StanServer(int port) {
+    public NatsStreamingServer(int port) {
         this(null, port, false);
     }
 
-    public StanServer(int port, boolean debug) {
+    public NatsStreamingServer(int port, boolean debug) {
         this.debug = debug;
         psInfo = this.createProcessStartInfo();
 
@@ -78,11 +78,11 @@ class StanServer implements Runnable, AutoCloseable {
         start();
     }
 
-    public StanServer(String id, boolean debug) {
+    public NatsStreamingServer(String id, boolean debug) {
         this(id, -1, debug);
     }
 
-    public StanServer(String id, int port, boolean debug) {
+    public NatsStreamingServer(String id, int port, boolean debug) {
         this.debug = debug;
         psInfo = this.createProcessStartInfo();
 

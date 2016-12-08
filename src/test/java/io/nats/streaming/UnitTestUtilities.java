@@ -1,8 +1,8 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
@@ -24,13 +24,6 @@ import io.nats.streaming.protobuf.PubAck;
 import io.nats.streaming.protobuf.PubMsg;
 import io.nats.streaming.protobuf.SubscriptionRequest;
 import io.nats.streaming.protobuf.SubscriptionResponse;
-
-import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,12 +32,17 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class UnitTestUtilities {
     static final Logger logger = LoggerFactory.getLogger(UnitTestUtilities.class);
 
     // final Object mu = new Object();
-    static StanServer defaultServer = null;
+    static NatsStreamingServer defaultServer = null;
     Process authServerProcess = null;
 
     static final String testClusterName = "test-cluster";
@@ -64,12 +62,13 @@ class UnitTestUtilities {
     static StreamingConnection newMockedConnection() throws IOException, InterruptedException {
         io.nats.client.Connection nc = setupMockNatsConnection();
         Options opts = new Options.Builder().natsConn(nc).build();
-        StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName, testClientName, opts);
-        conn.connect();
-        return conn;
+        StreamingConnectionImpl conn = new StreamingConnectionImpl(testClusterName,
+                testClientName, opts);
+        return conn.connect();
     }
 
-    static StreamingConnection newMockedConnection(boolean owned) throws IOException, InterruptedException {
+    static StreamingConnection newMockedConnection(boolean owned) throws IOException,
+            InterruptedException {
         StreamingConnectionImpl conn = null;
         io.nats.client.Connection nc = setupMockNatsConnection();
         if (owned) {
@@ -164,6 +163,17 @@ class UnitTestUtilities {
         }).when(nc).request(matches(subRequests), any(byte[].class), any(long.class),
                 any(TimeUnit.class));
 
+        SubscriptionResponse unsubResponseProto = SubscriptionResponse.newBuilder().build();
+        io.nats.client.Message unsubResponse =
+                new io.nats.client.Message("foo", "bar", unsubResponseProto.toByteArray());
+        try {
+            when(nc.request(eq(unsubRequests), any(byte[].class), any(long.class)))
+                    .thenReturn(unsubResponse);
+        } catch (IOException e) {
+            e.printStackTrace();
+            fail(e.getMessage());
+        }
+
         CloseResponse closeResponseProto = CloseResponse.newBuilder().build();
         io.nats.client.Message closeResponse =
                 new io.nats.client.Message("foo", "bar", closeResponseProto.toByteArray());
@@ -211,7 +221,7 @@ class UnitTestUtilities {
 
     static synchronized void startDefaultServer(boolean debug) {
         if (defaultServer == null) {
-            defaultServer = new StanServer(debug);
+            defaultServer = new NatsStreamingServer(debug);
             try {
                 Thread.sleep(500);
             } catch (InterruptedException e) {
@@ -241,12 +251,12 @@ class UnitTestUtilities {
         authServerProcess = Runtime.getRuntime().exec("gnatsd -config auth.conf");
     }
 
-    StanServer createServerOnPort(int port) {
+    NatsStreamingServer createServerOnPort(int port) {
         return createServerOnPort(port, false);
     }
 
-    StanServer createServerOnPort(int port, boolean debug) {
-        StanServer nsrv = new StanServer(port, debug);
+    NatsStreamingServer createServerOnPort(int port, boolean debug) {
+        NatsStreamingServer nsrv = new NatsStreamingServer(port, debug);
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {
@@ -255,12 +265,12 @@ class UnitTestUtilities {
         return nsrv;
     }
 
-    StanServer createServerWithConfig(String configFile) {
+    NatsStreamingServer createServerWithConfig(String configFile) {
         return createServerWithConfig(configFile, false);
     }
 
-    StanServer createServerWithConfig(String configFile, boolean debug) {
-        StanServer nsrv = new StanServer(configFile, debug);
+    NatsStreamingServer createServerWithConfig(String configFile, boolean debug) {
+        NatsStreamingServer nsrv = new NatsStreamingServer(configFile, debug);
         sleep(500);
         return nsrv;
     }
@@ -340,8 +350,8 @@ class UnitTestUtilities {
         }
 
         try (BufferedReader reader =
-                new BufferedReader(new InputStreamReader(url.openStream(), "UTF-8"))) {
-            for (String line; (line = reader.readLine()) != null;) {
+                     new BufferedReader(new InputStreamReader(url.openStream(), "UTF-8"))) {
+            for (String line; (line = reader.readLine()) != null; ) {
                 System.out.println(line);
             }
         } catch (IOException e) {
@@ -375,12 +385,12 @@ class UnitTestUtilities {
         return val;
     }
 
-    static StanServer runServer(String clusterId) {
+    static NatsStreamingServer runServer(String clusterId) {
         return runServer(clusterId, false);
     }
 
-    static StanServer runServer(String clusterId, boolean debug) {
-        StanServer srv = new StanServer(clusterId, debug);
+    static NatsStreamingServer runServer(String clusterId, boolean debug) {
+        NatsStreamingServer srv = new NatsStreamingServer(clusterId, debug);
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {
@@ -391,7 +401,8 @@ class UnitTestUtilities {
 
     static synchronized void setLogLevel(ch.qos.logback.classic.Level level) {
         ch.qos.logback.classic.Logger lbLog =
-                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("io.nats.streaming");
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("io.nats" +
+                        ".streaming");
         lbLog.setLevel(level);
     }
 }

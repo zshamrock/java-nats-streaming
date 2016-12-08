@@ -1,8 +1,8 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
@@ -284,16 +284,5 @@ public class SubscriptionOptions {
             return new SubscriptionOptions(this);
         }
     }
-
-    // static BigInteger toBigInteger(Instant instant) {
-    // BigInteger result = null;
-    // BigInteger resultNanos = null;
-    // long nanos = TimeUnit.SECONDS.toNanos(instant.getLong(ChronoField.INSTANT_SECONDS));
-    // result = new BigInteger(Long.toUnsignedString(nanos));
-    // resultNanos =
-    // new BigInteger(Long.toUnsignedString(instant.getLong(ChronoField.NANO_OF_SECOND)));
-    // result = result.add(resultNanos);
-    // return result;
-    // }
 }
 

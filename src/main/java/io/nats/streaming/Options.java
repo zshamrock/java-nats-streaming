@@ -1,20 +1,20 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
 import java.time.Duration;
 
 public class Options {
-    private String natsUrl;
-    private io.nats.client.Connection natsConn;
-    private Duration connectTimeout;
-    private Duration ackTimeout;
-    private String discoverPrefix;
-    private int maxPubAcksInFlight;
+    String natsUrl;
+    io.nats.client.Connection natsConn;
+    Duration connectTimeout;
+    Duration ackTimeout;
+    String discoverPrefix;
+    int maxPubAcksInFlight;
 
     private Options(Builder builder) {
         this.natsUrl = builder.natsUrl;

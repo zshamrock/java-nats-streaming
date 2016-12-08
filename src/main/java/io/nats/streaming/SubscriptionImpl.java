@@ -1,23 +1,27 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
+import static io.nats.streaming.NatsStreaming.ERR_CLOSE_REQ_TIMEOUT;
+import static io.nats.streaming.NatsStreaming.ERR_NO_SERVER_SUPPORT;
+import static io.nats.streaming.NatsStreaming.ERR_UNSUB_REQ_TIMEOUT;
+import static io.nats.streaming.NatsStreaming.PFX;
+
+import io.nats.client.Connection;
 import io.nats.client.Nats;
 import io.nats.streaming.protobuf.SubscriptionResponse;
 import io.nats.streaming.protobuf.UnsubscribeRequest;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
+import java.io.InterruptedIOException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class SubscriptionImpl implements Subscription {
     static final Logger logger = LoggerFactory.getLogger(SubscriptionImpl.class);
@@ -35,10 +39,12 @@ class SubscriptionImpl implements Subscription {
     SubscriptionOptions opts = new SubscriptionOptions.Builder().build();
     MessageHandler cb;
 
-    protected SubscriptionImpl() {}
+    protected SubscriptionImpl() {
+    }
 
-    protected SubscriptionImpl(String subject, String qgroup, MessageHandler cb, StreamingConnectionImpl sc,
-            SubscriptionOptions opts) {
+    protected SubscriptionImpl(String subject, String qgroup, MessageHandler cb,
+                               StreamingConnectionImpl sc,
+                               SubscriptionOptions opts) {
         this.subject = subject;
         this.qgroup = qgroup;
         this.cb = cb;
@@ -97,31 +103,35 @@ class SubscriptionImpl implements Subscription {
     }
 
     @Override
-    public void unsubscribe() throws IOException, InterruptedException, TimeoutException {
-        closeOrUnsubscribe(false);
+    public void close() throws IOException {
+        if (this.sc == null) {
+            // already closed
+            return;
+        }
+        close(true);
     }
 
-    void closeOrUnsubscribe(boolean doClose) throws IOException, InterruptedException, TimeoutException {
-        StreamingConnectionImpl sc = null;
-        String inbox = null;
-        String reqSubject = null;
+    @Override
+    public void close(boolean unsubscribe) throws IOException {
+        StreamingConnectionImpl sc;
+        String reqSubject;
+        Connection nc;
         wLock();
         try {
             sc = this.sc;
             if (sc == null) {
-                // FIXME Already closed.
                 throw new IllegalStateException(NatsStreaming.ERR_BAD_SUBSCRIPTION);
             }
             this.sc = null;
-            try {
-                if (inboxSub != null) {
+            if (inboxSub != null) {
+                try {
                     inboxSub.unsubscribe();
+                } catch (Exception e) {
+                    // Silently ignore this, we can't do anything about it
+                    logger.debug("stan: exception unsubscribing from inbox ('{}')", e.getMessage());
                 }
-            } catch (Exception e) {
-                logger.warn("stan: encountered exception unsubscribing from inbox", e);
+                inboxSub = null;
             }
-            inboxSub = null;
-            inbox = this.inbox;
         } finally {
             wUnlock();
         }
@@ -136,45 +146,52 @@ class SubscriptionImpl implements Subscription {
                 throw new IllegalStateException(NatsStreaming.ERR_CONNECTION_CLOSED);
             }
 
-            sc.subMap.remove(inbox);
+            sc.subMap.remove(this.inbox);
             reqSubject = sc.unsubRequests;
+            if (!unsubscribe) {
+                reqSubject = sc.subCloseRequests;
+                if (reqSubject.isEmpty()) {
+                    throw new IllegalStateException(ERR_NO_SERVER_SUPPORT);
+                }
+            }
+            // Snapshot connection to avoid data race, since the connection may be
+            // closing while we try to send the request
+            nc = sc.getNatsConnection();
         } finally {
             sc.unlock();
         }
 
-        // Send unsubscribe to server.
+        byte[] bytes;
 
-        // FIXME(dlc) = Add in durable?
-        UnsubscribeRequest usr = UnsubscribeRequest.newBuilder().setClientID(sc.getClientId())
-                .setSubject(subject).setInbox(ackInbox).build();
-        byte[] bytes = usr.toByteArray();
+        UnsubscribeRequest usr = UnsubscribeRequest.newBuilder()
+                .setClientID(sc.getClientId()).setSubject(subject).setInbox(ackInbox).build();
+        bytes = usr.toByteArray();
 
+        io.nats.client.Message reply;
         // logger.trace("Sending UnsubscribeRequest:\n{}", usr);
-        // FIXME(dlc) - make timeout configurable.
-        io.nats.client.Message reply = sc.nc.request(reqSubject, bytes, 2, TimeUnit.SECONDS);
-        if (reply == null) {
-            throw new TimeoutException(Nats.ERR_TIMEOUT);
+        try {
+            reply = nc.request(reqSubject, bytes, sc.opts.connectTimeout.toMillis());
+            if (reply == null) {
+                if (unsubscribe) {
+                    throw new IOException(ERR_UNSUB_REQ_TIMEOUT);
+                }
+                throw new IOException(ERR_CLOSE_REQ_TIMEOUT);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException(e);
         }
 
         SubscriptionResponse response = SubscriptionResponse.parseFrom(reply.getData());
         // logger.trace("Received Unsubscribe SubscriptionResponse:\n{}", response);
         if (!response.getError().isEmpty()) {
-            throw new IOException("stan: " + response.getError());
+            throw new IOException(PFX + response.getError());
         }
     }
 
     @Override
-    public void close() {
-        if (this.sc == null) {
-            // already closed
-            return;
-        }
-        try {
-            unsubscribe();
-        } catch (Exception e) {
-            logger.warn("stan: exception during unsubscribe for subject {}", this.subject);
-            logger.debug("Stack trace: ", e);
-        }
+    public void unsubscribe() throws IOException {
+        close(true);
     }
 
     protected void setAckInbox(String ackInbox) {

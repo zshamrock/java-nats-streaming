@@ -1,11 +1,14 @@
-/*******************************************************************************
- * Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
- * materials are made available under the terms of the MIT License (MIT) which accompanies this
- * distribution, and is available at http://opensource.org/licenses/MIT
- *******************************************************************************/
+/*
+ *  Copyright (c) 2015-2016 Apcera Inc. All rights reserved. This program and the accompanying
+ *  materials are made available under the terms of the MIT License (MIT) which accompanies this
+ *  distribution, and is available at http://opensource.org/licenses/MIT
+ */
 
 package io.nats.streaming;
 
+import static io.nats.streaming.NatsStreaming.ERR_CLOSE_REQ_TIMEOUT;
+import static io.nats.streaming.NatsStreaming.ERR_SUB_REQ_TIMEOUT;
+import static io.nats.streaming.NatsStreaming.ERR_UNSUB_REQ_TIMEOUT;
 import static io.nats.streaming.NatsStreaming.SERVER_ERR_INVALID_SEQUENCE;
 import static io.nats.streaming.NatsStreaming.SERVER_ERR_INVALID_TIME;
 import static io.nats.streaming.UnitTestUtilities.runServer;
@@ -18,6 +21,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static sun.misc.GThreadHelper.lock;
 
 import com.google.common.base.Stopwatch;
 import io.nats.client.Connection;
@@ -118,7 +122,7 @@ public class ITConnectionTest {
 
     @Test
     public void testUnreachable() throws Exception {
-        try (StanServer ignored = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             boolean exThrown = false;
 
             // Non-existent or unreachable
@@ -143,7 +147,7 @@ public class ITConnectionTest {
 
     @Test
     public void testConnClosedOnConnectFailure() throws Exception {
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             // Non-Existent or Unreachable
             int connectTime = 25;
             Options opts = new Options.Builder()
@@ -185,7 +189,7 @@ public class ITConnectionTest {
 
     @Test
     public void testNatsConnNotClosedOnClose() throws Exception {
-        try (StanServer ignored = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             // Create a NATS connection
             try (io.nats.client.Connection nc = Nats.connect()) {
                 // Pass this NATS connection to NATS Streaming
@@ -219,7 +223,7 @@ public class ITConnectionTest {
 
     @Test
     public void testBasicConnect() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 sleep(100, TimeUnit.MILLISECONDS);
             }
@@ -229,7 +233,7 @@ public class ITConnectionTest {
     @Test
     public void testBasicPublish() throws Exception {
         // Run a STAN server
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 sc.publish("foo", "Hello World!".getBytes());
             }
@@ -242,7 +246,7 @@ public class ITConnectionTest {
         final String[] cbguid = new String[1];
         // final Lock glock = new ReentrantLock();
         // Run a STAN server
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 AckHandler acb = (lguid, ex) -> {
                     cbguid[0] = lguid;
@@ -265,7 +269,7 @@ public class ITConnectionTest {
         final CountDownLatch latch = new CountDownLatch(1);
         final String[] guid = new String[1];
         // Run a STAN server
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             Options opts = new Options.Builder().pubAckWait(Duration.ofMillis(50)).build();
             try (StreamingConnection sc = NatsStreaming.connect(clusterName, clientName, opts)) {
                 AckHandler acb = (lguid, ex) -> {
@@ -293,7 +297,7 @@ public class ITConnectionTest {
     @Test
     public void testBasicSubscription() throws Exception {
         // Run a STAN server
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 SubscriptionOptions sopts = new SubscriptionOptions.Builder().build();
                 try (Subscription sub = sc.subscribe("foo", msg -> {
@@ -311,7 +315,7 @@ public class ITConnectionTest {
     public void testBasicQueueSubscription()
             throws Exception {
         // Run a STAN server
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final AtomicInteger count = new AtomicInteger();
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -328,7 +332,7 @@ public class ITConnectionTest {
                     // same name can coexist and they both receive the same message.
                     SubscriptionOptions sopts = new SubscriptionOptions.Builder()
                             .setDurableName("durable-queue-sub").build();
-                    try (Subscription sub2 = sc.subscribe("foo", "bar", cb, sopts)) {
+                    try (Subscription ignored = sc.subscribe("foo", "bar", cb, sopts)) {
 
                         // Publish a message
                         sc.publish("foo", "msg".getBytes());
@@ -364,7 +368,7 @@ public class ITConnectionTest {
         final long total = 5;
         final long firstBatch = total;
         final long secondBatch = 2 * total;
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 for (int i = 0; i < total; i++) {
                     sc.publish("foo", "msg".getBytes());
@@ -417,7 +421,7 @@ public class ITConnectionTest {
 
     @Test
     public void testBasicPubSub() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
@@ -451,7 +455,7 @@ public class ITConnectionTest {
 
     @Test
     public void testBasicPubQueueSub() throws Exception {
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
@@ -482,7 +486,7 @@ public class ITConnectionTest {
     @Test
     public void testBasicPubSubFlowControl()
             throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
@@ -491,7 +495,7 @@ public class ITConnectionTest {
 
                 SubscriptionOptions opts =
                         new SubscriptionOptions.Builder().setMaxInFlight(25).build();
-                try (Subscription sub = sc.subscribe("foo", msg -> {
+                try (Subscription ignored = sc.subscribe("foo", msg -> {
                     if (received.incrementAndGet() >= toSend) {
                         latch.countDown();
                     }
@@ -513,7 +517,7 @@ public class ITConnectionTest {
 
     @Test
     public void testSubscriptionStartPositionLast() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 int toSend = 10;
                 final AtomicInteger received = new AtomicInteger(0);
@@ -566,24 +570,12 @@ public class ITConnectionTest {
 
     @Test
     public void testSubscriptionStartAtSequence() throws Exception {
-        try (StanServer ignored = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 // Publish ten messages
                 for (int i = 1; i <= 10; i++) {
-                    sc.publish("foo", String.format("%d", i).getBytes());
-                }
-
-                // Check for invalid sequence number
-                SubscriptionOptions opts =
-                        new SubscriptionOptions.Builder().startAtSequence(500).build();
-                boolean exThrown = false;
-                try (SubscriptionImpl sub = (SubscriptionImpl) sc.subscribe("foo", null, opts)) {
-                    /* NOOP */
-                } catch (IOException e) {
-                    assertEquals(NatsStreaming.SERVER_ERR_INVALID_SEQUENCE, e.getMessage());
-                    exThrown = true;
-                } finally {
-                    assertTrue(exThrown);
+                    byte[] data = String.format("%d", i).getBytes();
+                    sc.publish("foo", data);
                 }
 
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -599,22 +591,19 @@ public class ITConnectionTest {
                         latch.countDown();
                     }
                 };
-                // Now subscribe and set start position to #6, so should
-                // received 6-10.
+                // Now subscribe and set start position to #6, so should receive 6-10.
                 try (Subscription sub = sc.subscribe("foo", mcb,
                         new SubscriptionOptions.Builder().startAtSequence(6).build())) {
 
                     // Check for sub setup
-                    assertEquals(StartPosition.SequenceStart, sub.getOptions().getStartAt());
-                    assertEquals(6, sub.getOptions().getStartSequence());
+                    assertEquals(StartPosition.SequenceStart,((SubscriptionImpl)sub).opts.startAt);
+                    assertEquals(6, ((SubscriptionImpl)sub).opts.startSequence);
 
                     assertTrue("Did not receive our messages", latch.await(5, TimeUnit.SECONDS));
 
                     // Check we received them in order
-                    Iterator<Message> it = savedMsgs.iterator();
                     long seq = 6;
-                    while (it.hasNext()) {
-                        Message msg = it.next();
+                    for (Message msg : savedMsgs) {
                         // Check sequence
                         assertEquals(seq, msg.getSequence());
                         // Check payload
@@ -635,14 +624,13 @@ public class ITConnectionTest {
 
     @Test
     public void testSubscriptionStartAtTime() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 // Publish first five
                 for (int i = 1; i <= 5; i++) {
                     byte[] data = String.format("%d", i).getBytes();
                     sc.publish("foo", data);
                 }
-
                 // Buffer each side so slow tests still work.
                 sleep(250, TimeUnit.MILLISECONDS);
                 // Date startTime = new Date(System.currentTimeMillis());
@@ -653,19 +641,6 @@ public class ITConnectionTest {
                 for (int i = 6; i <= 10; i++) {
                     byte[] data = String.format("%d", i).getBytes();
                     sc.publish("foo", data);
-                }
-
-                // Check for illegal configuration
-                SubscriptionOptions opts = new SubscriptionOptions.Builder()
-                        .startAtTime(new Date(-1).toInstant()).build();
-                boolean exThrown = false;
-                try (SubscriptionImpl sub = (SubscriptionImpl) sc.subscribe("foo", null, opts)) {
-                    fail("Subscription should have failed");
-                } catch (Exception e) {
-                    assertEquals(SERVER_ERR_INVALID_TIME, e.getMessage());
-                    exThrown = true;
-                } finally {
-                    assertTrue("Should have thrown exception for bad startAtTime", exThrown);
                 }
 
                 final CountDownLatch[] latch = new CountDownLatch[1];
@@ -693,7 +668,8 @@ public class ITConnectionTest {
                     assertEquals("Incorrect start time.", startTime,
                             sub.getOptions().getStartTime());
 
-                    assertTrue("Did not receive our messages", latch[0].await(5, TimeUnit.SECONDS));
+                    assertTrue("Did not receive our messages",
+                            latch[0].await(5, TimeUnit.SECONDS));
 
                     // Check we received them in order
                     Iterator<Message> it = savedMsgs.iterator();
@@ -730,46 +706,9 @@ public class ITConnectionTest {
     }
 
     @Test
-    public void testSubscriptionStartAtTimeWithEmptyStore() throws Exception {
-        // TODO Remove this once server is fixed to allow this
-        thrown.expect(IOException.class);
-        thrown.expectMessage(SERVER_ERR_INVALID_TIME);
-        // Run a NATS Streaming server
-        try (StanServer ignored = runServer(clusterName)) {
-            try (StreamingConnection sc = newDefaultConnection()) {
-                MessageHandler mcb = msg -> {
-                };
-
-                try (Subscription sub = sc.subscribe("foo", mcb,
-                        new SubscriptionOptions.Builder().startAtTime(Instant.now()).build())) {
-                    // Should fail for now
-                }
-            }
-        }
-    }
-
-    @Test
-    public void testSubscriptionStartAtSequenceWithEmptyStore() throws Exception {
-        thrown.expect(IOException.class);
-        thrown.expectMessage(SERVER_ERR_INVALID_SEQUENCE);
-        // Run a NATS Streaming server
-        try (StanServer ignored = runServer(clusterName)) {
-            try (StreamingConnection sc = newDefaultConnection()) {
-                MessageHandler mcb = msg -> {
-                };
-
-                try (Subscription sub = sc.subscribe("foo", mcb,
-                        new SubscriptionOptions.Builder().startAtSequence(0).build())) {
-                    // Should fail for now
-                }
-            }
-        }
-    }
-
-    @Test
     public void testSubscriptionStartAtWithEmptyStore() throws Exception {
         // Run a NATS Streaming server
-        try (StanServer ignored = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
 
                 MessageHandler mcb = msg -> {
@@ -785,15 +724,15 @@ public class ITConnectionTest {
 //                    // Should work fine
 //                }
 
-                try (Subscription sub = sc.subscribe("foo", mcb,
+                try (Subscription ignored2 = sc.subscribe("foo", mcb,
                         new SubscriptionOptions.Builder().startWithLastReceived().build())) {
                     /* NOOP */
-                } catch (Exception e) {
+                } catch (IOException | InterruptedException e) {
                     fail(String.format("Expected no error on Subscribe, got: '%s'",
                             e.getMessage()));
                 }
 
-                try (Subscription sub = sc.subscribe("foo", mcb)) {
+                try (Subscription ignored3 = sc.subscribe("foo", mcb)) {
                     /* NOOP */
                 } catch (Exception e) {
                     fail(String.format("Expected no error on Subscribe, got: '%s'",
@@ -805,7 +744,7 @@ public class ITConnectionTest {
 
     @Test
     public void testSubscriptionStartAtFirst() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 // Publish ten messages
                 for (int i = 1; i <= 10; i++) {
@@ -855,7 +794,7 @@ public class ITConnectionTest {
     @Test
     public void testUnsubscribe() throws Exception {
         // Run a NATS Streaming server
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 boolean exThrown = false;
 
@@ -917,7 +856,7 @@ public class ITConnectionTest {
 
     @Test
     public void testUnsubscribeWhileConnClosing() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             Options opts = new Options.Builder()
                     .pubAckWait(Duration.ofMillis(50))
                     .build();
@@ -946,7 +885,7 @@ public class ITConnectionTest {
 
     @Test
     public void testSubscribeShrink() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (final StreamingConnection sc = newDefaultConnection()) {
                 int nsubs = 1000;
                 List<Subscription> subs = new CopyOnWriteArrayList<Subscription>();
@@ -979,7 +918,7 @@ public class ITConnectionTest {
 
     @Test
     public void testDupClientId() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             boolean exThrown = false;
             try (final StreamingConnection sc = newDefaultConnection()) {
                 try (final StreamingConnection sc2 = newDefaultConnection()) {
@@ -995,7 +934,7 @@ public class ITConnectionTest {
 
     @Test
     public void testClose() {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             StreamingConnection sc = null;
             Subscription sub = null;
 
@@ -1058,7 +997,7 @@ public class ITConnectionTest {
 
     @Test
     public void testDoubleClose() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             StreamingConnection sc = newDefaultConnection();
             sc.close();
             sc.close();
@@ -1067,7 +1006,7 @@ public class ITConnectionTest {
 
     @Test
     public void testManualAck() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
 
                 final int toSend = 100;
@@ -1159,7 +1098,7 @@ public class ITConnectionTest {
 
     @Test
     public void testRedelivery() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
 
                 final int toSend = 100;
@@ -1227,7 +1166,7 @@ public class ITConnectionTest {
         final CountDownLatch latch = new CountDownLatch(1);
 
         // Run a NATS Streaming server
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final AtomicInteger acked = new AtomicInteger();
                 final AtomicBoolean secondRedelivery = new AtomicBoolean(false);
@@ -1317,40 +1256,6 @@ public class ITConnectionTest {
     }
 
     @Test
-    public void testRedeliveryHonorMaxInFlight() throws Exception {
-        // Run a NATS Streaming server
-        try (StanServer srv = runServer(clusterName)) {
-            try (StreamingConnection sc = newDefaultConnection()) {
-                int toSend = 100;
-                byte[] hw = "Hello World".getBytes();
-
-                for (int i = 0; i < toSend; i++) {
-                    sc.publish("foo", hw);
-                }
-
-                final BlockingQueue<String> errCh = new LinkedBlockingQueue<String>();
-                final AtomicInteger received = new AtomicInteger();
-                Duration ackRedeliverTime = Duration.ofSeconds(1);
-
-                SubscriptionOptions sopts =
-                        new SubscriptionOptions.Builder().deliverAllAvailable().setMaxInFlight(100)
-                                .setAckWait(ackRedeliverTime).setManualAcks(true).build();
-                try (Subscription sub = sc.subscribe("foo", msg -> {
-                    if (msg.isRedelivered()) {
-                        errCh.add(String.format("Message %d was redelivered", msg.getSequence()));
-                        return;
-                    }
-                    received.incrementAndGet();
-                }, sopts)) {
-                    String err = errCh.poll(2, TimeUnit.SECONDS);
-                    assertNull(err);
-                    assertEquals(toSend, received.get());
-                }
-            }
-        }
-    }
-
-    @Test
     public void testLowRedeliveryToSubMoreThanOnce() throws Exception {
         checkRedelivery(10, false);
     }
@@ -1372,7 +1277,7 @@ public class ITConnectionTest {
 
     @Test
     public void testDurableSubscriber() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             final StreamingConnection sc = newDefaultConnection();
 
             final int toSend = 100;
@@ -1476,12 +1381,9 @@ public class ITConnectionTest {
                 assertEquals("Didn't receive all messages", toSend, received.get());
                 assertEquals("Didn't save all messages", toSend, msgs.size());
                 // Check we received them in order
-                Iterator<Message> it = msgs.iterator();
                 int idx = 0;
-                while (it.hasNext()) {
-                    long seqExpected = ++idx;
-                    long seq = it.next().getSequence();
-                    assertEquals("Wrong sequence number", seqExpected, seq);
+                for (Message msg : msgs) {
+                    assertEquals("Wrong sequence number", ++idx, msg.getSequence());
                 }
                 sc2.close();
 
@@ -1498,7 +1400,7 @@ public class ITConnectionTest {
 
     @Test
     public void testPubMultiQueueSub() throws InterruptedException {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
@@ -1567,7 +1469,7 @@ public class ITConnectionTest {
     @Test
     public void testPubMultiQueueSubWithSlowSubscriberAndFlapping()
             throws InterruptedException, IOException, TimeoutException {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final Subscription[] subs = new Subscription[2];
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -1640,7 +1542,7 @@ public class ITConnectionTest {
     @Test
     public void testPubMultiQueueSubWithSlowSubscriber()
             throws Exception {
-        try (StanServer ignored = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final Subscription[] subs = new Subscription[2];
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -1717,7 +1619,7 @@ public class ITConnectionTest {
 
     @Test
     public void testPubMultiQueueSubWithRedelivery() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger received = new AtomicInteger(0);
@@ -1783,7 +1685,7 @@ public class ITConnectionTest {
 
     @Test
     public void testPubMultiQueueSubWithDelayRedelivery() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final CountDownLatch latch = new CountDownLatch(1);
                 final AtomicInteger ackCount = new AtomicInteger(0);
@@ -1853,7 +1755,7 @@ public class ITConnectionTest {
 
     @Test
     public void testRedeliveredFlag() throws Exception {
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 final int toSend = 100;
                 byte[] hw = "Hello World".getBytes();
@@ -1921,7 +1823,7 @@ public class ITConnectionTest {
     @Test
     public void testNoDuplicatesOnSubscriberStart() throws Exception {
         // Run a NATS Streaming server
-        try (StanServer s = runServer(clusterName)) {
+        try (NatsStreamingServer s = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 int batch = 100;
                 final CountDownLatch latch = new CountDownLatch(1);
@@ -1980,7 +1882,7 @@ public class ITConnectionTest {
 
     @Test(timeout = 3000)
     public void testRaceOnClose() throws Exception {
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 // Seems that this sleep makes it happen all the time.
                 sleep(1250);
@@ -1990,7 +1892,7 @@ public class ITConnectionTest {
 
     @Test(timeout = 5000)
     public void testRaceAckOnClose() throws Exception {
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 int toSend = 100;
 
@@ -2019,7 +1921,7 @@ public class ITConnectionTest {
 
     @Test
     public void testNatsConn() throws Exception {
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
                 // Make sure we can get the STAN-created Conn.
                 io.nats.client.Connection nc = sc.getNatsConnection();
@@ -2034,12 +1936,9 @@ public class ITConnectionTest {
                 try {
                     sc.close();
                 } catch (IllegalStateException e) {
-                    if (e.getMessage().equals(Nats.ERR_CONNECTION_CLOSED)) {
-                        /* NOOP */
-                    } else {
-                        throw e;
-                    }
+                    assertEquals(Nats.ERR_CONNECTION_CLOSED, e.getMessage());
                 }
+
                 assertNull("Wrapped conn should be null after close", sc.getNatsConnection());
             } // outer sc
 
@@ -2066,11 +1965,7 @@ public class ITConnectionTest {
                     assertEquals("Should have status set to CLOSED", ConnState.CLOSED,
                             nc.getState());
                 } catch (IllegalStateException e) {
-                    if (e.getMessage().equals(Nats.ERR_CONNECTION_CLOSED)) {
-                        /* NOOP */
-                    } else {
-                        throw e;
-                    }
+                    assertEquals(Nats.ERR_CONNECTION_CLOSED, e.getMessage());
                 }
             }
 
@@ -2088,7 +1983,7 @@ public class ITConnectionTest {
 
     @Test
     public void testMaxPubAcksInFlight() throws Exception {
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
             try (Connection nc = Nats.connect()) {
                 Options opts = new Options.Builder()
                         .maxPubAcksInFlight(1)
@@ -2124,12 +2019,80 @@ public class ITConnectionTest {
     public void testNatsUrlOption() throws Exception {
         thrown.expect(IOException.class);
         thrown.expectMessage(Nats.ERR_NO_SERVERS);
-        try (StanServer srv = runServer(clusterName)) {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
             Options opts = new Options.Builder()
                     .natsUrl("nats://localhost:5555")
                     .build();
             try (StreamingConnection sc = NatsStreaming.connect(clusterName, clientName, opts)) {
-                /* NOOP */
+                fail("Expected connect to fail");
+            }
+        }
+    }
+
+    @Test
+    public void testTimeoutOnRequests() throws Exception {
+        try (NatsStreamingServer srv = runServer(clusterName)) {
+            try (StreamingConnection sc = newDefaultConnection()) {
+                Subscription sub1 = sc.subscribe("foo", msg -> {});
+                Subscription sub2 = sc.subscribe("foo", msg -> {});
+
+                // For this test, change the reqTimeoutto very low value
+                ((StreamingConnectionImpl)sc).lock();
+                try {
+                    ((StreamingConnectionImpl)sc).opts.connectTimeout = Duration.ofMillis(10);
+                } finally {
+                    ((StreamingConnectionImpl)sc).unlock();
+                }
+
+                // Shutdown server
+                srv.shutdown();
+
+                // Subscribe
+                try (Subscription ignored = sc.subscribe("foo", msg -> {})) {
+                    fail("Should not have subscribed successfully");
+                } catch (Exception e) {
+                    assertTrue("Expected IOException", e instanceof IOException);
+                    assertEquals("Wrong error message", ERR_SUB_REQ_TIMEOUT, e.getMessage());
+                }
+
+                // If connecting to an old server...
+                if (((StreamingConnectionImpl) sc).subCloseRequests.isEmpty()) {
+                    // Trick the API into thinking that it can send, and make sure the call
+                    // times out
+                    ((StreamingConnectionImpl) sc).lock();
+                    try {
+                        ((StreamingConnectionImpl) sc).subCloseRequests = "sub.close.subject";
+                    } finally {
+                        ((StreamingConnectionImpl) sc).unlock();
+                    }
+                }
+
+                // Subscription Close
+                try {
+                    sub1.close(false);
+                    fail("Should have thrown an exception");
+                } catch (Exception e) {
+                    assertTrue("Expected IOException", e instanceof IOException);
+                    assertEquals("Wrong exception message", ERR_CLOSE_REQ_TIMEOUT, e.getMessage());
+                }
+
+                // Unsubscribe
+                try {
+                    sub2.unsubscribe();
+                    fail("Should have thrown an exception");
+                } catch (Exception e) {
+                    assertTrue("Expected IOException", e instanceof IOException);
+                    assertEquals("Wrong exception message", ERR_UNSUB_REQ_TIMEOUT, e.getMessage());
+                }
+
+                // Connection close
+                try {
+                    sc.close();
+                    fail("Should have thrown an exception");
+                } catch (Exception e) {
+                    assertTrue("Expected IOException", e instanceof IOException);
+                    assertEquals("Wrong exception message", ERR_CLOSE_REQ_TIMEOUT, e.getMessage());
+                }
             }
         }
     }
