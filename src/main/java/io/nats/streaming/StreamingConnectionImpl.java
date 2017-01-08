@@ -552,7 +552,14 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     TimerTask createAckTimerTask(String guid) {
         TimerTask task = new java.util.TimerTask() {
             public void run() {
-                processAckTimeout(guid);
+                try {
+                    processAckTimeout(guid);
+                } catch (Exception e) {
+                    // catch exception to prevent the timer to be closed
+                    logger.error("stan: error encountered during processAckTimeout, will cancel this timer task", e);
+                    // cancel this task
+                    cancel();
+                }
             }
         };
         return task;
@@ -560,6 +567,10 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
 
     protected void processAckTimeout(String guid) {
         AckClosure ackClosure = removeAck(guid);
+        if (ackClosure == null) {
+            logger.warn("stan: no ack available, could be due to the race condition");
+            return;
+        }
         if (ackClosure.ah != null) {
             ackClosure.ah.onAck(guid, new TimeoutException(NatsStreaming.ERR_TIMEOUT));
         } else if (ackClosure.ch != null && !ackClosure.ch.offer(NatsStreaming.ERR_TIMEOUT)) {
