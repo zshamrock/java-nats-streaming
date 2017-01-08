@@ -588,7 +588,14 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
     TimerTask createAckTimerTask(String guid) {
         TimerTask task = new java.util.TimerTask() {
             public void run() {
-                processAckTimeout(guid);
+                try {
+                    processAckTimeout(guid);
+                } catch (Exception e) {
+                    // catch exception to prevent the timer to be closed
+                    logger.error("stan: error encountered during processAckTimeout, will cancel this timer task", e);
+                    // cancel this task
+                    cancel();
+                }
             }
         };
         return task;
@@ -596,6 +603,10 @@ class ConnectionImpl implements Connection, io.nats.client.MessageHandler {
 
     protected void processAckTimeout(String guid) {
         AckClosure ackClosure = removeAck(guid);
+        if (ackClosure == null) {
+            logger.warn("stan: no ack available, could be due to the race condition");
+            return;
+        }
         if (ackClosure.ah != null) {
             ackClosure.ah.onAck(guid, new TimeoutException(ERR_TIMEOUT));
         } else if (ackClosure.ch != null) {
