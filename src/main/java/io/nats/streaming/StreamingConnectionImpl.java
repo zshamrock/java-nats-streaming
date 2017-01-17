@@ -568,7 +568,6 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     protected void processAckTimeout(String guid) {
         AckClosure ackClosure = removeAck(guid);
         if (ackClosure == null) {
-            logger.warn("stan: no ack available, could be due to the race condition");
             return;
         }
         if (ackClosure.ah != null) {
