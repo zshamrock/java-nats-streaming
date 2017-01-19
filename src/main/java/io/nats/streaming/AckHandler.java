@@ -7,7 +7,7 @@
 package io.nats.streaming;
 
 /**
- * A callback interface for handling STAN message acks.
+ * A callback interface for handling NATS Streaming message acknowledgements.
  */
 public interface AckHandler {
     /**

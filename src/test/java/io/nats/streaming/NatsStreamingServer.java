@@ -14,17 +14,16 @@ import java.util.Arrays;
 import java.util.List;
 
 class NatsStreamingServer implements Runnable, AutoCloseable {
-    static final String STAN_SERVER = "nats-streaming-server";
+    private static final String STAN_SERVER = "nats-streaming-server";
 
     // Enable this for additional server debugging info.
-    boolean debug = false;
+    private boolean debug = false;
 
-    ProcessBuilder pb;
-    Process proc;
-    ProcessStartInfo psInfo;
+    private Process proc;
+    private ProcessStartInfo psInfo;
 
     class ProcessStartInfo {
-        List<String> arguments = new ArrayList<String>();
+        final List<String> arguments = new ArrayList<String>();
 
         public ProcessStartInfo(String command) {
             this.arguments.add(command);
@@ -82,7 +81,7 @@ class NatsStreamingServer implements Runnable, AutoCloseable {
         this(id, -1, debug);
     }
 
-    public NatsStreamingServer(String id, int port, boolean debug) {
+    private NatsStreamingServer(String id, int port, boolean debug) {
         this.debug = debug;
         psInfo = this.createProcessStartInfo();
 
@@ -106,9 +105,9 @@ class NatsStreamingServer implements Runnable, AutoCloseable {
         return psInfo;
     }
 
-    public void start() {
+    private void start() {
         try {
-            pb = new ProcessBuilder(psInfo.arguments);
+            ProcessBuilder pb = new ProcessBuilder(psInfo.arguments);
             pb.directory(new File("target"));
             if (debug) {
                 System.err.println("Inheriting IO, psInfo =" + psInfo);

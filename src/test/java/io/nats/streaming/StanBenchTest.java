@@ -10,11 +10,13 @@ import static io.nats.streaming.UnitTestUtilities.runServer;
 import static io.nats.streaming.UnitTestUtilities.testClusterName;
 import static org.junit.Assert.fail;
 
+import ch.qos.logback.classic.Logger;
 import io.nats.client.NUID;
 import io.nats.streaming.examples.StanBench;
-
-import ch.qos.logback.classic.Logger;
-
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -23,11 +25,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.slf4j.LoggerFactory;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
 
 public class StanBenchTest {
     static final Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);

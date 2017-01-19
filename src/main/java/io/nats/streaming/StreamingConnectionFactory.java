@@ -12,10 +12,10 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 /**
- * A {@code StreamingConnectionFactory} object encapsulates a set of connection configuration options. A
- * client uses it to create a connection to the STAN streaming data system.
+ * A {@code StreamingConnectionFactory} object encapsulates a set of connection configuration
+ * options. A client uses it to create a connection to the STAN streaming data system.
  */
-public class StreamingConnectionFactory {
+class StreamingConnectionFactory {
     private Duration ackTimeout = Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT);
     private Duration connectTimeout = Duration.ofSeconds(NatsStreaming
             .DEFAULT_CONNECT_WAIT);
@@ -47,11 +47,9 @@ public class StreamingConnectionFactory {
     }
 
     Options options() {
-        Options opts =
-                new Options.Builder().connectWait(connectTimeout).pubAckWait(ackTimeout)
-                        .discoverPrefix(discoverPrefix).maxPubAcksInFlight(maxPubAcksInFlight)
-                        .natsConn(natsConn).natsUrl(natsUrl).build();
-        return opts;
+        return new Options.Builder().connectWait(connectTimeout).pubAckWait(ackTimeout)
+                .discoverPrefix(discoverPrefix).maxPubAcksInFlight(maxPubAcksInFlight)
+                .natsConn(natsConn).natsUrl(natsUrl).build();
     }
 
     /**
@@ -148,8 +146,7 @@ public class StreamingConnectionFactory {
      */
     public void setMaxPubAcksInFlight(int maxPubAcksInFlight) {
         if (maxPubAcksInFlight < 0) {
-            throw new IllegalArgumentException("stan: max publish acks in flight must be >= " +
-                    "0");
+            throw new IllegalArgumentException("stan: max publish acks in flight must be >= 0");
         }
         this.maxPubAcksInFlight = maxPubAcksInFlight;
     }

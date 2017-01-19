@@ -89,9 +89,11 @@ public class StreamingConnectionImplTest {
     private BlockingQueue<PubAck> pubAckChanMock;
 
     @Mock
+    private
     HashMap<String, AckClosure> pubAckMapMock;
 
     @Mock
+    private
     Map<String, Subscription> subMapMock;
 
     @BeforeClass
@@ -699,7 +701,7 @@ public class StreamingConnectionImplTest {
     public void testBasicSubscribeDurableSuccess() throws Exception {
         try (StreamingConnectionImpl conn = (StreamingConnectionImpl) newMockedConnection()) {
             conn.subscribe("foo", null,
-                    new SubscriptionOptions.Builder().setDurableName("my-durable").build());
+                    new SubscriptionOptions.Builder().durableName("my-durable").build());
         }
     }
 
@@ -1260,7 +1262,7 @@ public class StreamingConnectionImplTest {
             mockSub.ackInbox = ackSubject;
             mockSub.sc = conn;
             when(mockSub.getOptions())
-                    .thenReturn(new SubscriptionOptions.Builder().setManualAcks(true).build());
+                    .thenReturn(new SubscriptionOptions.Builder().manualAcks().build());
             conn.subMap.put(subject, mockSub);
 
             MsgProto msgp = MsgProto.newBuilder().setSubject("foo").setReply("bar")

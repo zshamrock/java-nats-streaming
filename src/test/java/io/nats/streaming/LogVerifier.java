@@ -6,11 +6,8 @@
 
 package io.nats.streaming;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -19,8 +16,9 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
 import ch.qos.logback.core.Appender;
-
 import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -28,24 +26,20 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.verification.VerificationMode;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.regex.Pattern;
-
-public class LogVerifier {
+class LogVerifier {
     @Mock
     private Appender<ILoggingEvent> mockAppender;
-    // Captor is genericised with ch.qos.logback.classic.spi.LoggingEvent
+    // Captor is genericized with ch.qos.logback.classic.spi.LoggingEvent
     @Captor
     private ArgumentCaptor<LoggingEvent> captorLoggingEvent;
 
-    protected void setup() {
+    void setup() {
         MockitoAnnotations.initMocks(this);
         final Logger logger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         logger.addAppender(mockAppender);
     }
 
-    protected void teardown() {
+    void teardown() {
         final Logger logger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         logger.detachAppender(mockAppender);
     }
@@ -67,7 +61,7 @@ public class LogVerifier {
         verifyLogMsg(level, msg, false, times(1));
     }
 
-    void verifyLogMsg(Level level, String pattern, boolean exact, VerificationMode mode) {
+    private void verifyLogMsg(Level level, String pattern, boolean exact, VerificationMode mode) {
         // Now verify our logging interactions
         verify(mockAppender, mode).doAppend(captorLoggingEvent.capture());
         List<LoggingEvent> events = captorLoggingEvent.getAllValues();
@@ -108,7 +102,7 @@ public class LogVerifier {
         }
     }
 
-    void printLoggingEvents(List<LoggingEvent> events) {
+    private void printLoggingEvents(List<LoggingEvent> events) {
         List<LoggingEvent> matches = new ArrayList<>();
         for (LoggingEvent ev : events) {
             System.err.printf("[%s] %s\n", ev.getLevel(), ev.getFormattedMessage());

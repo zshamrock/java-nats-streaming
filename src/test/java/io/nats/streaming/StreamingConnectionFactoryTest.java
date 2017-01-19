@@ -14,22 +14,19 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import io.nats.client.Connection;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import java.io.IOException;
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 @Category(UnitTest.class)
-@RunWith(MockitoJUnitRunner.class)
 public class StreamingConnectionFactoryTest {
 
     @BeforeClass
@@ -92,7 +89,7 @@ public class StreamingConnectionFactoryTest {
         cf.setConnectTimeout(Duration.ofMillis(500));
         cf.setDiscoverPrefix("_FOO");
         cf.setMaxPubAcksInFlight(1000);
-        io.nats.client.Connection nc = null;
+        Connection nc;
 
         nc = setupMockNatsConnection();
 
@@ -213,7 +210,7 @@ public class StreamingConnectionFactoryTest {
     }
 
     /**
-     * Test method for {@link StreamingConnectionFactory#getnatsUrl()}.
+     * Test method for {@link StreamingConnectionFactory#getNatsUrl()}.
      */
     @Test
     public void testGetNatsUrl() {

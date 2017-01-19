@@ -12,39 +12,36 @@ import static io.nats.streaming.NatsStreaming.ERR_UNSUB_REQ_TIMEOUT;
 import static io.nats.streaming.NatsStreaming.PFX;
 
 import io.nats.client.Connection;
-import io.nats.client.Nats;
 import io.nats.streaming.protobuf.SubscriptionResponse;
 import io.nats.streaming.protobuf.UnsubscribeRequest;
 import java.io.IOException;
-import java.io.InterruptedIOException;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class SubscriptionImpl implements Subscription {
-    static final Logger logger = LoggerFactory.getLogger(SubscriptionImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(SubscriptionImpl.class);
 
     static final long DEFAULT_ACK_WAIT = 30 * 1000;
     static final int DEFAULT_MAX_IN_FLIGHT = 1024;
 
-    final ReadWriteLock rwlock = new ReentrantReadWriteLock();
+    private final ReadWriteLock rwlock = new ReentrantReadWriteLock();
     StreamingConnectionImpl sc;
-    String subject;
-    String qgroup;
+    private String subject;
+    private String qgroup;
     String inbox;
     String ackInbox;
     io.nats.client.Subscription inboxSub;
     SubscriptionOptions opts = new SubscriptionOptions.Builder().build();
     MessageHandler cb;
 
-    protected SubscriptionImpl() {
+    SubscriptionImpl() {
     }
 
-    protected SubscriptionImpl(String subject, String qgroup, MessageHandler cb,
-                               StreamingConnectionImpl sc,
-                               SubscriptionOptions opts) {
+    SubscriptionImpl(String subject, String qgroup, MessageHandler cb,
+                     StreamingConnectionImpl sc,
+                     SubscriptionOptions opts) {
         this.subject = subject;
         this.qgroup = qgroup;
         this.cb = cb;
@@ -55,35 +52,35 @@ class SubscriptionImpl implements Subscription {
         this.inbox = sc.newInbox();
     }
 
-    protected void rLock() {
+    void rLock() {
         rwlock.readLock().lock();
     }
 
-    protected void rUnlock() {
+    void rUnlock() {
         rwlock.readLock().unlock();
     }
 
-    protected void wLock() {
+    void wLock() {
         rwlock.writeLock().lock();
     }
 
-    protected void wUnlock() {
+    void wUnlock() {
         rwlock.writeLock().unlock();
     }
 
-    protected String getAckInbox() {
+    String getAckInbox() {
         return this.ackInbox;
     }
 
-    protected StreamingConnectionImpl getConnection() {
+    StreamingConnectionImpl getConnection() {
         return this.sc;
     }
 
-    protected String getInbox() {
+    String getInbox() {
         return this.inbox;
     }
 
-    protected MessageHandler getMessageHandler() {
+    MessageHandler getMessageHandler() {
         return this.cb;
     }
 
@@ -194,7 +191,7 @@ class SubscriptionImpl implements Subscription {
         close(true);
     }
 
-    protected void setAckInbox(String ackInbox) {
+    void setAckInbox(String ackInbox) {
         this.ackInbox = ackInbox;
     }
 }

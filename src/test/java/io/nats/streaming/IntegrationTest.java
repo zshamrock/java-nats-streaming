@@ -6,6 +6,6 @@
 
 package io.nats.streaming;
 
-public interface IntegrationTest {
+interface IntegrationTest {
 
 }
