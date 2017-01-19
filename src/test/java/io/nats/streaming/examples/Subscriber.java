@@ -6,14 +6,13 @@
 
 package io.nats.streaming.examples;
 
+import io.nats.streaming.Message;
+import io.nats.streaming.MessageHandler;
 import io.nats.streaming.NatsStreaming;
 import io.nats.streaming.Options;
 import io.nats.streaming.StreamingConnection;
-import io.nats.streaming.Message;
-import io.nats.streaming.MessageHandler;
 import io.nats.streaming.Subscription;
 import io.nats.streaming.SubscriptionOptions;
-
 import java.text.ParseException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -31,17 +30,13 @@ public class Subscriber {
     private String subject;
     private String clusterId = "test-cluster";
     private String clientId = "test-client";
-    private SubscriptionOptions.Builder builder = new SubscriptionOptions.Builder();
+    private final SubscriptionOptions.Builder builder = new SubscriptionOptions.Builder();
     private String qgroup;
     private String durable;
-    private long seq = -1L;
-    private boolean all;
-    private boolean last;
-    private Duration since;
     private int count = 0;
     private boolean unsubscribe;
 
-    static final String usageString = "\nUsage: java Subscriber [options] <subject>\n\nOptions:\n"
+    private static final String usageString = "\nUsage: java Subscriber [options] <subject>\n\nOptions:\n"
             + "    -s,  --server   <urls>           NATS Streaming server URL(s)\n"
             + "    -c,  --cluster  <cluster name>   NATS Streaming cluster name\n"
             + "    -id, --clientid <client ID>      NATS Streaming client ID               \n\n"
@@ -60,11 +55,11 @@ public class Subscriber {
         parseArgs(args);
     }
 
-    public static void usage() {
+    private static void usage() {
         System.err.println(usageString);
     }
 
-    public void run() throws Exception {
+    private void run() throws Exception {
         Options opts = null;
         if (url != null) {
             opts = new Options.Builder().natsUrl(url).build();
@@ -123,7 +118,7 @@ public class Subscriber {
         }
     }
 
-    void parseArgs(String[] args) {
+    private void parseArgs(String[] args) {
         if (args == null || args.length < 1) {
             throw new IllegalArgumentException("must supply at least a subject name");
         }
@@ -180,17 +175,14 @@ public class Subscriber {
                         throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
-                    seq = Long.parseLong(it.next());
-                    builder.startAtSequence(seq);
+                    builder.startAtSequence(Long.parseLong(it.next()));
                     it.remove();
                     continue;
                 case "--all":
-                    all = true;
                     builder.deliverAllAvailable();
                     it.remove();
                     continue;
                 case "--last":
-                    last = true;
                     builder.startWithLastReceived();
                     it.remove();
                     continue;
@@ -200,8 +192,7 @@ public class Subscriber {
                     }
                     it.remove();
                     try {
-                        since = parseDuration(it.next());
-                        builder.startAtTimeDelta(since);
+                        builder.startAtTimeDelta(parseDuration(it.next()));
                     } catch (ParseException e) {
                         throw new IllegalArgumentException(e.getMessage());
                     }
@@ -212,8 +203,7 @@ public class Subscriber {
                         throw new IllegalArgumentException(arg + " requires an argument");
                     }
                     it.remove();
-                    durable = it.next();
-                    builder.setDurableName(durable);
+                    builder.durableName(it.next());
                     it.remove();
                     continue;
                 case "-u":
@@ -235,7 +225,7 @@ public class Subscriber {
         }
     }
 
-    private static Pattern pattern =
+    private static final Pattern pattern =
             Pattern.compile("(\\d+)d\\s*(\\d+)h\\s*(\\d+)m\\s*(\\d+)s\\s*(\\d+)ns");
 
     /**
@@ -243,7 +233,7 @@ public class Subscriber {
      * 
      * @throws ParseException if the duration can't be parsed
      */
-    public static Duration parseDuration(String duration) throws ParseException {
+    private static Duration parseDuration(String duration) throws ParseException {
         Matcher matcher = pattern.matcher(duration);
 
         long nanoseconds = 0L;

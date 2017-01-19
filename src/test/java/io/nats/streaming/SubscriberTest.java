@@ -12,12 +12,16 @@ import static io.nats.streaming.UnitTestUtilities.testClusterName;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import ch.qos.logback.classic.Logger;
 import io.nats.client.Nats;
 import io.nats.streaming.examples.Publisher;
 import io.nats.streaming.examples.Subscriber;
-
-import ch.qos.logback.classic.Logger;
-
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -28,13 +32,6 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.ExpectedException;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 @Category(IntegrationTest.class)
 public class SubscriberTest {
     static final Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -42,7 +39,7 @@ public class SubscriberTest {
 
     static final LogVerifier verifier = new LogVerifier();
 
-    static final String clusterId = UnitTestUtilities.testClusterName;
+    private static final String clusterId = UnitTestUtilities.testClusterName;
 
     ExecutorService service = Executors.newCachedThreadPool();
 
@@ -66,10 +63,8 @@ public class SubscriberTest {
 
     @Test
     public void testSubscriberStringArray() throws Exception {
-        String clusterId = UnitTestUtilities.testClusterName;
-
         List<String> argList = new ArrayList<String>();
-        argList.addAll(Arrays.asList("-c", clusterId));
+        argList.addAll(Arrays.asList("-c", UnitTestUtilities.testClusterName));
         argList.add("foo");
 
         String[] args = new String[argList.size()];

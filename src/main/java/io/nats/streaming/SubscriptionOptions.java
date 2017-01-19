@@ -7,14 +7,12 @@
 package io.nats.streaming;
 
 import io.nats.streaming.protobuf.StartPosition;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A SubscriptionOptions object defines the configurable parameters of a STAN Subscription object.
@@ -24,19 +22,19 @@ public class SubscriptionOptions {
     static final Logger logger = LoggerFactory.getLogger(SubscriptionOptions.class);
 
     // DurableName, if set will survive client restarts.
-    String durableName;
+    private final String durableName;
     // Controls the number of messages the cluster will have inflight without an ACK.
-    int maxInFlight;
+    private final int maxInFlight;
     // Controls the time the cluster will wait for an ACK for a given message.
-    Duration ackWait;
+    private final Duration ackWait;
     // StartPosition enum from proto.
     StartPosition startAt;
     // Optional start sequence number.
-    long startSequence;
+    final long startSequence;
     // Optional start time in nanoseconds since the UNIX epoch.
-    Instant startTime;
+    private final Instant startTime;
     // Option to do Manual Acks
-    boolean manualAcks;
+    private final boolean manualAcks;
 
     // Date startTimeAsDate;
 
@@ -52,7 +50,7 @@ public class SubscriptionOptions {
 
     /**
      * Returns the name of the durable subscriber.
-     * 
+     *
      * @return the name of the durable subscriber
      */
     public String getDurableName() {
@@ -61,7 +59,7 @@ public class SubscriptionOptions {
 
     /**
      * Returns the maximum number of messages the cluster will send without an ACK.
-     * 
+     *
      * @return the maximum number of messages the cluster will send without an ACK
      */
     public int getMaxInFlight() {
@@ -71,9 +69,9 @@ public class SubscriptionOptions {
     /**
      * Returns the timeout for waiting for an ACK from the cluster's point of view for delivered
      * messages.
-     * 
+     *
      * @return the timeout for waiting for an ACK from the cluster's point of view for delivered
-     *         messages
+     *     messages
      */
     public Duration getAckWait() {
         return ackWait;
@@ -81,7 +79,7 @@ public class SubscriptionOptions {
 
     /**
      * Returns the desired start position for the message stream.
-     * 
+     *
      * @return the desired start position for the message stream
      */
     public StartPosition getStartAt() {
@@ -90,7 +88,7 @@ public class SubscriptionOptions {
 
     /**
      * Returns the desired start sequence position.
-     * 
+     *
      * @return the desired start sequence position
      */
     public long getStartSequence() {
@@ -99,7 +97,7 @@ public class SubscriptionOptions {
 
     /**
      * Returns the desired start time position.
-     * 
+     *
      * @return the desired start time position
      */
     public Instant getStartTime() {
@@ -108,7 +106,7 @@ public class SubscriptionOptions {
 
     /**
      * Returns the desired start time position in the requested units.
-     * 
+     *
      * @param unit the unit of time
      * @return the desired start time position
      */
@@ -122,9 +120,8 @@ public class SubscriptionOptions {
     /**
      * Returns whether or not messages for this subscription must be acknowledged individually by
      * calling {@link Message#ack()}.
-     * 
+     *
      * @return whether or not manual acks are required for this subscription.
-     * 
      */
     public boolean isManualAcks() {
         return manualAcks;
@@ -145,45 +142,90 @@ public class SubscriptionOptions {
 
         /**
          * Sets the durable subscriber name for the subscription.
-         * 
+         *
+         * @param durableName the name of the durable subscriber
+         * @return this
+         * @deprecated Use {@link #durableName(String)} instead
+         */
+        public Builder setDurableName(String durableName) {
+            return durableName(durableName);
+        }
+
+        /**
+         * Sets the durable subscriber name for the subscription.
+         *
          * @param durableName the name of the durable subscriber
          * @return this
          */
-        public Builder setDurableName(String durableName) {
+        public Builder durableName(String durableName) {
             this.durableName = durableName;
             return this;
         }
 
         /**
          * Sets the maximum number of in-flight (unacknowledged) messages for the subscription.
-         * 
-         * @param maxInFlight the maximum number of in-flight messages
+         *
+         * @param max maximum number of in-flight messages
+         * @return this
+         * @deprecated Use {@link #maxInFlight(int)} instead
+         */
+        public Builder setMaxInFlight(int max) {
+            return maxInFlight(max);
+        }
+
+        /**
+         * Sets the maximum number of in-flight (unacknowledged) messages for the subscription.
+         *
+         * @param max the maximum number of in-flight messages
          * @return this
          */
-        public Builder setMaxInFlight(int maxInFlight) {
-            this.maxInFlight = maxInFlight;
+        public Builder maxInFlight(int max) {
+            this.maxInFlight = max;
             return this;
         }
 
         /**
          * Sets the amount of time the subscription will wait for ACKs from the cluster.
-         * 
+         *
+         * @param ackWait the amount of time the subscription will wait for an ACK from the cluster
+         * @return this
+         * @deprecated use {@link #ackWait(Duration)} instead
+         */
+        public Builder setAckWait(Duration ackWait) {
+            return ackWait(ackWait);
+        }
+
+        /**
+         * Sets the amount of time the subscription will wait for ACKs from the cluster.
+         *
+         * @param ackWait the amount of time the subscription will wait for an ACK from the cluster
+         * @param unit    the time unit
+         * @return this
+         * @deprecated use {@link #ackWait(long, TimeUnit)} instead
+         */
+        public Builder setAckWait(long ackWait, TimeUnit unit) {
+            return ackWait(ackWait, unit);
+        }
+
+        /**
+         * Sets the amount of time the subscription will wait for ACKs from the cluster.
+         *
          * @param ackWait the amount of time the subscription will wait for an ACK from the cluster
          * @return this
          */
-        public Builder setAckWait(Duration ackWait) {
+        public Builder ackWait(Duration ackWait) {
             this.ackWait = ackWait;
             return this;
         }
 
         /**
          * Sets the amount of time the subscription will wait for ACKs from the cluster.
-         * 
+         *
          * @param ackWait the amount of time the subscription will wait for an ACK from the cluster
-         * @param unit the time unit
+         * @param unit    the time unit
          * @return this
          */
-        public Builder setAckWait(long ackWait, TimeUnit unit) {
+        public Builder ackWait(long ackWait, TimeUnit unit) {
             this.ackWait = Duration.ofMillis(unit.toMillis(ackWait));
             return this;
         }
@@ -191,18 +233,29 @@ public class SubscriptionOptions {
         /**
          * Sets whether or not messages must be acknowledge individually by calling
          * {@link Message#ack()}.
-         * 
+         *
          * @param manualAcks whether or not messages must be manually acknowledged
          * @return this
+         * @deprecated use {@link #manualAcks()} instead
          */
         public Builder setManualAcks(boolean manualAcks) {
-            this.manualAcks = manualAcks;
+            return manualAcks();
+        }
+
+        /**
+         * Sets whether or not messages must be acknowledge individually by calling
+         * {@link Message#ack()}.
+         *
+         * @return this
+         */
+        public Builder manualAcks() {
+            this.manualAcks = true;
             return this;
         }
 
         /**
          * Specifies the sequence number from which to start receiving messages.
-         * 
+         *
          * @param seq the sequence number from which to start receiving messages
          * @return this
          */
@@ -214,7 +267,7 @@ public class SubscriptionOptions {
 
         /**
          * Specifies the desired start time position using {@code java.time.Instant}.
-         * 
+         *
          * @param start the desired start time position expressed as a {@code java.time.Instant}
          * @return this
          */
@@ -226,8 +279,8 @@ public class SubscriptionOptions {
 
         /**
          * Specifies the desired delta start time position in the desired unit.
-         * 
-         * @param ago the historical time delta (from now) from which to start receiving messages
+         *
+         * @param ago  the historical time delta (from now) from which to start receiving messages
          * @param unit the time unit
          * @return this
          */
@@ -241,7 +294,7 @@ public class SubscriptionOptions {
 
         /**
          * Specifies the desired delta start time as a {@link java.time.Duration}.
-         * 
+         *
          * @param ago the historical time delta (from now) from which to start receiving messages
          * @return this
          */
@@ -256,7 +309,7 @@ public class SubscriptionOptions {
         /**
          * Specifies that message delivery should start with the last (most recent) message stored
          * for this subject.
-         * 
+         *
          * @return this
          */
         public Builder startWithLastReceived() {
@@ -267,7 +320,7 @@ public class SubscriptionOptions {
         /**
          * Specifies that message delivery should begin at the oldest available message for this
          * subject.
-         * 
+         *
          * @return this
          */
         public Builder deliverAllAvailable() {
@@ -277,7 +330,7 @@ public class SubscriptionOptions {
 
         /**
          * Creates a {@link SubscriptionOptions} instance based on the current configuration.
-         * 
+         *
          * @return the created {@link SubscriptionOptions} instance
          */
         public SubscriptionOptions build() {

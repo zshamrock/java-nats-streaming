@@ -9,12 +9,12 @@ package io.nats.streaming;
 import java.time.Duration;
 
 public class Options {
-    String natsUrl;
-    io.nats.client.Connection natsConn;
+    private final String natsUrl;
+    private final io.nats.client.Connection natsConn;
     Duration connectTimeout;
-    Duration ackTimeout;
-    String discoverPrefix;
-    int maxPubAcksInFlight;
+    private final Duration ackTimeout;
+    private final String discoverPrefix;
+    private final int maxPubAcksInFlight;
 
     private Options(Builder builder) {
         this.natsUrl = builder.natsUrl;

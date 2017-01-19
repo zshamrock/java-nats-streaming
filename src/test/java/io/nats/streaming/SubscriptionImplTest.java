@@ -69,8 +69,8 @@ public class SubscriptionImplTest {
      */
     @Test
     public void testSubscriptionImpl() throws Exception {
-        try (Subscription ignored = new SubscriptionImpl()) {
-            /* NOOP */
+        try (Subscription sub = new SubscriptionImpl()) {
+            assertNotNull(sub);
         }
     }
 

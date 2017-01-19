@@ -6,8 +6,6 @@
 
 package io.nats.streaming.examples;
 
-import static io.nats.streaming.NatsStreaming.defaultOptions;
-
 import io.nats.benchmark.Benchmark;
 import io.nats.benchmark.Sample;
 import io.nats.client.AsyncSubscription;
@@ -19,17 +17,13 @@ import io.nats.client.NATSException;
 import io.nats.client.NUID;
 import io.nats.client.Nats;
 import io.nats.streaming.AckHandler;
+import io.nats.streaming.Message;
+import io.nats.streaming.MessageHandler;
 import io.nats.streaming.NatsStreaming;
 import io.nats.streaming.Options;
 import io.nats.streaming.StreamingConnection;
-import io.nats.streaming.Message;
-import io.nats.streaming.MessageHandler;
 import io.nats.streaming.Subscription;
 import io.nats.streaming.SubscriptionOptions;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -49,13 +43,15 @@ import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A utility class for measuring NATS performance.
  *
  */
 public class StanBench {
-    static final Logger log = LoggerFactory.getLogger(StanBench.class);
+    private static final Logger log = LoggerFactory.getLogger(StanBench.class);
 
     // Default test values
     private int numMsgs = 100000;
@@ -63,15 +59,15 @@ public class StanBench {
     private int numSubs = 0;
     private boolean async = false;
     private int size = 128;
-    boolean ignoreOld = false;
-    int maxPubAcksInFlight = 1000;
-    String clientId = "benchmark";
-    String clusterId = "test-cluster";
+    private boolean ignoreOld = false;
+    private int maxPubAcksInFlight = 1000;
+    private String clientId = "benchmark";
+    private String clusterId = "test-cluster";
 
     private String urls = Nats.DEFAULT_URL;
     private String subject;
-    private AtomicInteger published = new AtomicInteger();
-    private AtomicInteger received = new AtomicInteger();
+    private final AtomicInteger published = new AtomicInteger();
+    private final AtomicInteger received = new AtomicInteger();
     private String csvFileName;
 
     private io.nats.client.Options natsOptions;
@@ -82,7 +78,7 @@ public class StanBench {
     private boolean secure;
     private Benchmark bench;
 
-    static final String usageString =
+    private static final String usageString =
             "\nUsage: nats-bench [-s server] [--tls] [-c clusterid] [-id clientid] [-np #pubs] "
                     + "[-ns #subs] [-n #msg] [-mpa #pubacks] [-ms size] "
                     + "[-io] [-a] [-csv file] <subject>\n\nOptions:\n"
@@ -144,10 +140,10 @@ public class StanBench {
     }
 
     class Worker implements Runnable {
-        protected final Phaser phaser;
-        protected final int numMsgs;
-        protected final int size;
-        protected final String workerClientId;
+        final Phaser phaser;
+        final int numMsgs;
+        final int size;
+        final String workerClientId;
 
         Worker(Phaser phaser, int numMsgs, int size, String workerClientId) {
             Thread.currentThread().setName(workerClientId);
@@ -245,6 +241,11 @@ public class StanBench {
 
             phaser.arrive();
             while (received.get() < numMsgs) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    break;
+                }
             }
         }
     }
@@ -273,7 +274,7 @@ public class StanBench {
 
         public void runPublisher() throws Exception {
             final io.nats.client.Connection nc = Nats.connect(urls, natsOptions);
-            Options pubOpts = null;
+            Options pubOpts;
             if (maxPubAcksInFlight > 0) {
                 pubOpts = new Options.Builder()
                         .maxPubAcksInFlight(maxPubAcksInFlight)
@@ -386,7 +387,7 @@ public class StanBench {
         }
     }
 
-    void installShutdownHook() {
+    private void installShutdownHook() {
         shutdownHook = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -401,7 +402,7 @@ public class StanBench {
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
 
-    void usage() {
+    private void usage() {
         System.err.println(usageString);
         System.exit(-1);
     }

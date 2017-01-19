@@ -10,7 +10,6 @@ import io.nats.streaming.AckHandler;
 import io.nats.streaming.NatsStreaming;
 import io.nats.streaming.Options;
 import io.nats.streaming.StreamingConnection;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,14 +19,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeoutException;
 
 public class Publisher {
-    String urls;
-    String subject;
-    String payloadString;
-    String clusterId = "test-cluster";
-    String clientId = "test-client";
-    boolean async;
+    private String urls;
+    private String subject;
+    private String payloadString;
+    private String clusterId = "test-cluster";
+    private String clientId = "test-client";
+    private boolean async;
 
-    static final String usageString =
+    private static final String usageString =
             "\nUsage: java Publisher [options] <subject> <message>\n\nOptions:\n"
                     + "    -s, --server   <urls>           NATS Streaming server URL(s)\n"
                     + "    -c, --cluster  <cluster name>   NATS Streaming cluster name\n"
@@ -45,7 +44,7 @@ public class Publisher {
         parseArgs(args);
     }
 
-    static void usage() {
+    private static void usage() {
         System.err.println(usageString);
     }
 
@@ -71,7 +70,7 @@ public class Publisher {
                     if (!guid[0].equals(nuid)) {
                         System.err.printf(
                                 "Expected a matching guid in ack callback, got %s vs %s\n", nuid,
-                                guid);
+                                guid[0]);
                     }
                     System.out.flush();
                     latch.countDown();
@@ -80,14 +79,16 @@ public class Publisher {
 
             if (!async) {
                 try {
+                    //noinspection ConstantConditions
                     sc.publish(subject, payload);
                 } catch (Exception e) {
-                    System.err.printf("Error during publish: {}\n", e.getMessage());
+                    System.err.printf("Error during publish: %s\n", e.getMessage());
                     throw (e);
                 }
                 System.out.printf("Published [%s] : '%s'\n", subject, payloadString);
             } else {
                 try {
+                    //noinspection ConstantConditions
                     guid[0] = sc.publish(subject, payload, acb);
                     latch.await();
                 } catch (IOException e) {
@@ -113,12 +114,10 @@ public class Publisher {
             } else {
                 throw (e);
             }
-        } catch (TimeoutException e) {
-            throw (e);
         }
     }
 
-    void parseArgs(String[] args) {
+    private void parseArgs(String[] args) {
         if (args == null || args.length < 2) {
             throw new IllegalArgumentException("must supply at least subject and msg");
         }

@@ -17,10 +17,11 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.nats.streaming.protobuf.MsgProto;
-
 import com.google.protobuf.ByteString;
-
+import io.nats.streaming.protobuf.MsgProto;
+import java.io.IOException;
+import java.time.Instant;
+import java.util.concurrent.TimeoutException;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -32,13 +33,9 @@ import org.junit.rules.ExpectedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.time.Instant;
-import java.util.concurrent.TimeoutException;
-
 @Category(UnitTest.class)
 public class MessageTest {
-    static final Logger logger = LoggerFactory.getLogger(MessageTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(MessageTest.class);
 
     static final String clusterName = "my_test_cluster";
     static final String clientName = "me";
@@ -69,7 +66,7 @@ public class MessageTest {
         new Message();
     }
 
-    protected long getTimeNanos() {
+    private long getTimeNanos() {
         Instant inst = Instant.now();
         long timestamp = inst.getEpochSecond();
         timestamp *= 1000000000L; // convert to nanoseconds
@@ -104,7 +101,7 @@ public class MessageTest {
         assertEquals(sequence, msg.getSequence());
         assertEquals(redelivered, msg.isRedelivered());
         assertEquals(crc32, msg.getCrc32());
-        msg.getInstant();
+        assertNotNull(msg.getInstant());
         logger.info("msg={}", msg);
     }
 
@@ -236,7 +233,7 @@ public class MessageTest {
         StreamingConnectionImpl subConn = mock(StreamingConnectionImpl.class);
         when(mockSub.getConnection()).thenReturn(subConn);
         when(subConn.getNatsConnection()).thenReturn(mock(io.nats.client.Connection.class));
-        SubscriptionOptions subOpts = new SubscriptionOptions.Builder().setManualAcks(true).build();
+        SubscriptionOptions subOpts = new SubscriptionOptions.Builder().manualAcks().build();
         when(mockSub.getOptions()).thenReturn(subOpts);
         Message msg = new Message();
         msg.setSubject("foo");

@@ -6,14 +6,13 @@
 
 package io.nats.streaming;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.text.DecimalFormat;
 import org.junit.rules.ExternalResource;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.text.DecimalFormat;
 
 public class TestCasePrinterRule implements TestRule {
 
@@ -23,7 +22,6 @@ public class TestCasePrinterRule implements TestRule {
     private String beforeContent = null;
     private String afterContent = null;
     private long timeStart;
-    private long timeEnd;
 
     public TestCasePrinterRule(OutputStream os) {
         out = os;
@@ -39,7 +37,7 @@ public class TestCasePrinterRule implements TestRule {
         @Override
         protected void after() {
             try {
-                timeEnd = System.currentTimeMillis();
+                long timeEnd = System.currentTimeMillis();
                 double seconds = (timeEnd - timeStart) / 1000.0;
                 out.write((afterContent + "Time elapsed: "
                         + new DecimalFormat("0.000").format(seconds) + " sec\n").getBytes());

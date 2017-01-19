@@ -9,8 +9,6 @@ package io.nats.streaming;
 import static io.nats.streaming.NatsStreaming.ERR_CLOSE_REQ_TIMEOUT;
 import static io.nats.streaming.NatsStreaming.ERR_SUB_REQ_TIMEOUT;
 import static io.nats.streaming.NatsStreaming.ERR_UNSUB_REQ_TIMEOUT;
-import static io.nats.streaming.NatsStreaming.SERVER_ERR_INVALID_SEQUENCE;
-import static io.nats.streaming.NatsStreaming.SERVER_ERR_INVALID_TIME;
 import static io.nats.streaming.UnitTestUtilities.runServer;
 import static io.nats.streaming.UnitTestUtilities.sleep;
 import static org.junit.Assert.assertArrayEquals;
@@ -21,7 +19,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static sun.misc.GThreadHelper.lock;
 
 import com.google.common.base.Stopwatch;
 import io.nats.client.Connection;
@@ -33,18 +30,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -66,12 +60,11 @@ import org.slf4j.LoggerFactory;
 
 @Category(IntegrationTest.class)
 public class ITConnectionTest {
-    static final Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    static final Logger logger = (Logger) LoggerFactory.getLogger(ITConnectionTest.class);
+    private static final Logger logger = (Logger) LoggerFactory.getLogger(ITConnectionTest.class);
 
     static final LogVerifier verifier = new LogVerifier();
 
-    ExecutorService service = Executors.newCachedThreadPool();
+    private final ExecutorService service = Executors.newCachedThreadPool();
 
     @Rule
     public ExpectedException thrown = ExpectedException.none();
@@ -79,8 +72,8 @@ public class ITConnectionTest {
     @Rule
     public TestCasePrinterRule pr = new TestCasePrinterRule(System.out);
 
-    static final String clusterName = "test-cluster";
-    static final String clientName = "me";
+    private static final String clusterName = "test-cluster";
+    private static final String clientName = "me";
 
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
@@ -98,26 +91,23 @@ public class ITConnectionTest {
     public void tearDown() throws Exception {
     }
 
-    public StreamingConnection newDefaultConnection() throws IOException, InterruptedException {
-        return NatsStreaming.connect(clusterName, clientName);
+    private StreamingConnection newDefaultConnection() throws IOException, InterruptedException {
+        StreamingConnection conn = NatsStreaming.connect(clusterName, clientName);
+        assertNotNull(conn);
+        return conn;
     }
 
     @Test
     public void testNoNats() throws Exception {
+        thrown.expect(IOException.class);
+        thrown.expectMessage(Nats.ERR_NO_SERVERS);
+
         sleep(500, TimeUnit.MILLISECONDS);
         boolean exThrown = false;
         try (StreamingConnection c =
                      NatsStreaming.connect("someNonExistentClusterID", "myTestClient")) {
             fail("Should not have connected.");
-        } catch (IOException | TimeoutException e) {
-            assertTrue(e instanceof IOException);
-            if (!e.getMessage().equals(Nats.ERR_NO_SERVERS)) {
-                e.printStackTrace();
-            }
-            assertEquals(Nats.ERR_NO_SERVERS, e.getMessage());
-            exThrown = true;
         }
-        assertTrue("Should have thrown exception", exThrown);
     }
 
     @Test
@@ -131,13 +121,11 @@ public class ITConnectionTest {
             try (StreamingConnection c =
                          NatsStreaming.connect("someNonExistentServerID", "myTestClient")) {
                 fail("Should not have connected.");
-            } catch (IOException | TimeoutException e) {
+            } catch (IOException e) {
                 // e.printStackTrace();
                 assertEquals(NatsStreaming.ERR_CONNECTION_REQ_TIMEOUT, e.getMessage());
-                exThrown = true;
             }
             st.stop();
-            assertTrue("Should have thrown exception", exThrown);
             long delta = st.elapsed(TimeUnit.MILLISECONDS);
             String msg = String.format("Expected to wait at least %dms, but only waited %dms",
                     connectTime, delta);
@@ -156,7 +144,7 @@ public class ITConnectionTest {
             boolean exThrown = false;
             try (StreamingConnection sc =
                          NatsStreaming.connect("myTestClient", "someNonExistentServerId", opts)) {
-                // shouldn't work
+                fail("Shouldn't have connected");
             } catch (IOException e) {
                 assertEquals(NatsStreaming.ERR_CONNECTION_REQ_TIMEOUT, e.getMessage());
                 exThrown = true;
@@ -195,7 +183,7 @@ public class ITConnectionTest {
                 // Pass this NATS connection to NATS Streaming
                 StreamingConnection sc = NatsStreaming.connect(clusterName, clientName,
                         new Options.Builder().natsConn(nc).build());
-
+                assertNotNull(sc);
                 // Now close the NATS Streaming connection
                 sc.close();
 
@@ -272,6 +260,7 @@ public class ITConnectionTest {
         try (NatsStreamingServer s = runServer(clusterName)) {
             Options opts = new Options.Builder().pubAckWait(Duration.ofMillis(50)).build();
             try (StreamingConnection sc = NatsStreaming.connect(clusterName, clientName, opts)) {
+                assertNotNull(sc);
                 AckHandler acb = (lguid, ex) -> {
                     assertEquals(guid[0], lguid);
                     assertNotNull(ex);
@@ -302,7 +291,7 @@ public class ITConnectionTest {
                 SubscriptionOptions sopts = new SubscriptionOptions.Builder().build();
                 try (Subscription sub = sc.subscribe("foo", msg -> {
                 }, sopts)) {
-                    // should have succeeded
+                    assertNotNull(sub);
                 } catch (Exception e) {
                     fail("Unexpected error on Subscribe, got: " + e.getMessage());
                 }
@@ -331,7 +320,7 @@ public class ITConnectionTest {
                     // Test that durable and non durable queue subscribers with
                     // same name can coexist and they both receive the same message.
                     SubscriptionOptions sopts = new SubscriptionOptions.Builder()
-                            .setDurableName("durable-queue-sub").build();
+                            .durableName("durable-queue-sub").build();
                     try (Subscription ignored = sc.subscribe("foo", "bar", cb, sopts)) {
 
                         // Publish a message
@@ -345,10 +334,10 @@ public class ITConnectionTest {
                     }
 
                     // Check that one cannot use ':' for the queue durable name.
-                    sopts = new SubscriptionOptions.Builder().setDurableName("my:dur").build();
+                    sopts = new SubscriptionOptions.Builder().durableName("my:dur").build();
                     boolean exThrown = false;
                     try (Subscription sub3 = sc.subscribe("foo", "bar", cb, sopts)) {
-                        // do nothing?
+                        fail("Subscription should not have succeeded");
                     } catch (IOException e) {
                         assertEquals(NatsStreaming.SERVER_ERR_INVALID_DURABLE_NAME,
                                 e.getMessage());
@@ -381,7 +370,7 @@ public class ITConnectionTest {
                     }
                 };
                 sc.subscribe("foo", "bar", cb, new SubscriptionOptions.Builder()
-                        .deliverAllAvailable().setDurableName("durable-queue-sub").build());
+                        .deliverAllAvailable().durableName("durable-queue-sub").build());
 
                 assertTrue("Did not get our message", latch.await(5, TimeUnit.SECONDS));
                 // Give a chance to ACKs to make it to the server.
@@ -409,7 +398,7 @@ public class ITConnectionTest {
                 // and ignore the start position
                 try (Subscription sub = sc.subscribe("foo", "bar", cb,
                         new SubscriptionOptions.Builder().startAtSequence(10 * total)
-                                .setDurableName("durable-queue-sub").build())) {
+                                .durableName("durable-queue-sub").build())) {
 
                     assertTrue("Did not get our message.", latch.await(5, TimeUnit.SECONDS));
                 }
@@ -427,7 +416,7 @@ public class ITConnectionTest {
                 final AtomicInteger received = new AtomicInteger(0);
                 final int toSend = 500;
                 final byte[] hw = "Hello World".getBytes();
-                final ArrayList<Long> msgList = new ArrayList<Long>();
+                final ArrayList<Long> msgList = new ArrayList<>();
 
                 try (Subscription sub = sc.subscribe("foo", msg -> {
                     assertEquals("foo", msg.getSubject());
@@ -494,7 +483,7 @@ public class ITConnectionTest {
                 final byte[] hw = "Hello World".getBytes();
 
                 SubscriptionOptions opts =
-                        new SubscriptionOptions.Builder().setMaxInFlight(25).build();
+                        new SubscriptionOptions.Builder().maxInFlight(25).build();
                 try (Subscription ignored = sc.subscribe("foo", msg -> {
                     if (received.incrementAndGet() >= toSend) {
                         latch.countDown();
@@ -521,7 +510,7 @@ public class ITConnectionTest {
             try (StreamingConnection sc = newDefaultConnection()) {
                 int toSend = 10;
                 final AtomicInteger received = new AtomicInteger(0);
-                final List<Message> savedMsgs = new ArrayList<Message>();
+                final List<Message> savedMsgs = new ArrayList<>();
 
                 // Publish ten messages
                 for (int i = 0; i < toSend; i++) {
@@ -553,9 +542,8 @@ public class ITConnectionTest {
                     if (received.get() != 1) {
                         logger.error("Should have received 1 message with sequence {}, "
                                 + "but got these {} messages:\n", toSend, savedMsgs.size());
-                        Iterator<Message> it = savedMsgs.iterator();
-                        while (it.hasNext()) {
-                            System.err.println(it.next());
+                        for (Message savedMsg : savedMsgs) {
+                            System.err.println(savedMsg);
                         }
                         fail("Wrong number of messages");
                     }
@@ -583,7 +571,7 @@ public class ITConnectionTest {
                 final int shouldReceive = 5;
 
                 // Capture the messages that are delivered.
-                final List<Message> savedMsgs = new ArrayList<Message>();
+                final List<Message> savedMsgs = new ArrayList<>();
 
                 MessageHandler mcb = msg -> {
                     savedMsgs.add(msg);
@@ -616,7 +604,7 @@ public class ITConnectionTest {
         }
     }
 
-    static Instant getInstantFromNanos(long timestamp) {
+    private static Instant getInstantFromNanos(long timestamp) {
         long seconds = TimeUnit.NANOSECONDS.toSeconds(timestamp);
         long nanos = timestamp - TimeUnit.SECONDS.toNanos(seconds);
         return Instant.ofEpochSecond(seconds, nanos);
@@ -649,7 +637,7 @@ public class ITConnectionTest {
                 final int shouldReceive = 5;
 
                 // Capture the messages that are delivered.
-                final List<Message> savedMsgs = new ArrayList<Message>();
+                final List<Message> savedMsgs = new ArrayList<>();
 
                 MessageHandler mcb = msg -> {
                     savedMsgs.add(msg);
@@ -724,16 +712,16 @@ public class ITConnectionTest {
 //                    // Should work fine
 //                }
 
-                try (Subscription ignored2 = sc.subscribe("foo", mcb,
+                try (Subscription sub = sc.subscribe("foo", mcb,
                         new SubscriptionOptions.Builder().startWithLastReceived().build())) {
-                    /* NOOP */
+                    assertNotNull("Should have subscribed successfully", sub);
                 } catch (IOException | InterruptedException e) {
                     fail(String.format("Expected no error on Subscribe, got: '%s'",
                             e.getMessage()));
                 }
 
-                try (Subscription ignored3 = sc.subscribe("foo", mcb)) {
-                    /* NOOP */
+                try (Subscription sub = sc.subscribe("foo", mcb)) {
+                    assertNotNull("Should have subscribed successfully", sub);
                 } catch (Exception e) {
                     fail(String.format("Expected no error on Subscribe, got: '%s'",
                             e.getMessage()));
@@ -757,7 +745,7 @@ public class ITConnectionTest {
                 final int shouldReceive = 10;
 
                 // Capture the messages that are delivered.
-                final List<Message> savedMsgs = new ArrayList<Message>();
+                final List<Message> savedMsgs = new ArrayList<>();
                 MessageHandler mcb = msg -> {
                     savedMsgs.add(msg);
                     if (received.incrementAndGet() >= shouldReceive) {
@@ -861,6 +849,7 @@ public class ITConnectionTest {
                     .pubAckWait(Duration.ofMillis(50))
                     .build();
             try (StreamingConnection sc = NatsStreaming.connect(clusterName, clientName, opts)) {
+                assertNotNull(sc);
                 Subscription sub = sc.subscribe("foo", null);
                 final CountDownLatch wg = new CountDownLatch(1);
 
@@ -888,7 +877,7 @@ public class ITConnectionTest {
         try (NatsStreamingServer s = runServer(clusterName)) {
             try (final StreamingConnection sc = newDefaultConnection()) {
                 int nsubs = 1000;
-                List<Subscription> subs = new CopyOnWriteArrayList<Subscription>();
+                List<Subscription> subs = new CopyOnWriteArrayList<>();
                 for (int i = 0; i < nsubs; i++) {
                     // Create a valid one
                     Subscription sub = null;
@@ -922,12 +911,11 @@ public class ITConnectionTest {
             boolean exThrown = false;
             try (final StreamingConnection sc = newDefaultConnection()) {
                 try (final StreamingConnection sc2 = newDefaultConnection()) {
-                    /* NOOP */
+                    fail("Subscription should not have succeeded");
                 } catch (IOException | TimeoutException e) {
                     assertEquals(NatsStreaming.SERVER_ERR_INVALID_CLIENT, e.getMessage());
                     exThrown = true;
                 }
-                assertTrue("Should have thrown an exception", exThrown);
             }
         }
     }
@@ -1044,7 +1032,7 @@ public class ITConnectionTest {
                 final AtomicInteger received = new AtomicInteger(0);
 
                 // Capture the messages that are delivered.
-                final List<Message> msgs = new CopyOnWriteArrayList<Message>();
+                final List<Message> msgs = new CopyOnWriteArrayList<>();
 
                 // Test we only receive MaxInflight if we do not ack
                 try (Subscription sub = sc.subscribe("foo", msg -> {
@@ -1055,7 +1043,7 @@ public class ITConnectionTest {
                     } else if (nr > 10) {
                         try {
                             msg.ack();
-                        } catch (IOException | TimeoutException e) {
+                        } catch (IOException e) {
                             // NOOP
                             // e.printStackTrace();
                         }
@@ -1063,8 +1051,8 @@ public class ITConnectionTest {
                             sch.countDown();
                         }
                     }
-                }, new SubscriptionOptions.Builder().deliverAllAvailable().setMaxInFlight(10)
-                        .setManualAcks(true).build())) {
+                }, new SubscriptionOptions.Builder().deliverAllAvailable().maxInFlight(10)
+                        .manualAcks().build())) {
                     assertTrue("Did not receive at least 10 messages",
                             ch.await(5, TimeUnit.SECONDS));
 
@@ -1112,7 +1100,7 @@ public class ITConnectionTest {
                 boolean exThrown = false;
                 try {
                     sc.subscribe("foo", null, new SubscriptionOptions.Builder()
-                            .setAckWait(20, TimeUnit.MILLISECONDS).build());
+                            .ackWait(20, TimeUnit.MILLISECONDS).build());
                 } catch (Exception e) {
                     assertEquals(NatsStreaming.SERVER_ERR_INVALID_ACK_WAIT, e.getMessage());
                     exThrown = true;
@@ -1134,7 +1122,7 @@ public class ITConnectionTest {
                         sch.countDown();
                     }
                 }, new SubscriptionOptions.Builder().deliverAllAvailable()
-                        .setMaxInFlight(toSend + 1).setAckWait(ackRedeliverTime).setManualAcks(true)
+                        .maxInFlight(toSend + 1).ackWait(ackRedeliverTime).manualAcks()
                         .build())) {
                     assertTrue("Did not receive first delivery of all messages",
                             ch.await(5, TimeUnit.SECONDS));
@@ -1149,8 +1137,8 @@ public class ITConnectionTest {
         }
     }
 
-    public void checkTime(String label, Instant time1, Instant time2, Duration expected,
-                          Duration tolerance) {
+    private void checkTime(String label, Instant time1, Instant time2, Duration expected,
+                           Duration tolerance) {
         Duration duration = Duration.between(time1, time2);
         Duration lowerBoundary = expected.minus(tolerance);
         Duration upperBoundary = expected.plus(tolerance);
@@ -1160,7 +1148,7 @@ public class ITConnectionTest {
         }
     }
 
-    public void checkRedelivery(int count, boolean queueSub) throws Exception {
+    private void checkRedelivery(int count, boolean queueSub) throws Exception {
         final int toSend = count;
         final byte[] hw = "Hello World".getBytes();
         final CountDownLatch latch = new CountDownLatch(1);
@@ -1188,7 +1176,7 @@ public class ITConnectionTest {
                             if (acks <= toSend) {
                                 try {
                                     msg.ack();
-                                } catch (IOException | TimeoutException e) {
+                                } catch (IOException e) {
                                     e.printStackTrace();
                                     fail(e.getMessage());
                                 }
@@ -1213,7 +1201,7 @@ public class ITConnectionTest {
                 };
 
                 SubscriptionOptions sopts = new SubscriptionOptions.Builder()
-                        .setAckWait(ackRedeliverTime).setManualAcks(true).build();
+                        .ackWait(ackRedeliverTime).manualAcks().build();
                 String queue = null;
                 if (queueSub) {
                     queue = "bar";
@@ -1284,7 +1272,7 @@ public class ITConnectionTest {
             byte[] hw = "Hello World".getBytes();
 
             // Capture the messages that are delivered.
-            final List<Message> msgs = new CopyOnWriteArrayList<Message>();
+            final List<Message> msgs = new CopyOnWriteArrayList<>();
             Lock msgsGuard = new ReentrantLock();
 
             for (int i = 0; i < toSend; i++) {
@@ -1313,7 +1301,7 @@ public class ITConnectionTest {
                         msgsGuard.unlock();
                     }
                 }, new SubscriptionOptions.Builder().deliverAllAvailable()
-                        .setDurableName("durable-foo").build());
+                        .durableName("durable-foo").build());
 
                 assertTrue("Did not receive first delivery of all messages",
                         latch.await(5, TimeUnit.SECONDS));
@@ -1347,7 +1335,7 @@ public class ITConnectionTest {
                             latch2.countDown();
                         }
                     }, new SubscriptionOptions.Builder().deliverAllAvailable()
-                            .setDurableName("durable-foo").build());
+                            .durableName("durable-foo").build());
                 } catch (Exception e) {
                     e.printStackTrace();
                     fail("Should have subscribed successfully, but got: " + e.getMessage());
@@ -1358,7 +1346,7 @@ public class ITConnectionTest {
                 boolean exThrown = false;
                 try {
                     sc2.subscribe("foo", null, new SubscriptionOptions.Builder()
-                            .setDurableName("durable-foo").build());
+                            .durableName("durable-foo").build());
                 } catch (Exception e) {
                     assertEquals(NatsStreaming.SERVER_ERR_DUP_DURABLE, e.getMessage());
                     exThrown = true;
@@ -1369,7 +1357,7 @@ public class ITConnectionTest {
                 // different subject are ok.
                 try {
                     sc2.subscribe("bar", null, new SubscriptionOptions.Builder()
-                            .setDurableName("durable-foo").build());
+                            .durableName("durable-foo").build());
                 } catch (Exception e) {
                     e.printStackTrace();
                     fail(e.getMessage());
@@ -1409,7 +1397,7 @@ public class ITConnectionTest {
                 final int toSend = 1000;
                 final Subscription[] subs = new Subscription[2];
 
-                final Map<Long, Object> msgMap = new ConcurrentHashMap<Long, Object>();
+                final Map<Long, Object> msgMap = new ConcurrentHashMap<>();
                 MessageHandler mcb = msg -> {
                     // Remember the message sequence.
                     assertFalse("Detected duplicate for sequence: " + msg.getSequence(),
@@ -1477,7 +1465,7 @@ public class ITConnectionTest {
                 final AtomicInteger s1Received = new AtomicInteger(0);
                 final AtomicInteger s2Received = new AtomicInteger(0);
                 final int toSend = 500;
-                final Map<Long, Object> msgMap = new ConcurrentHashMap<Long, Object>();
+                final Map<Long, Object> msgMap = new ConcurrentHashMap<>();
                 final Object msgMapLock = new Object();
                 MessageHandler mcb = msg -> {
                     // Remember the message sequence.
@@ -1551,7 +1539,7 @@ public class ITConnectionTest {
                 final AtomicInteger s1Received = new AtomicInteger(0);
                 final AtomicInteger s2Received = new AtomicInteger(0);
                 final int toSend = 100;
-                final Map<Long, Object> msgMap = new ConcurrentHashMap<Long, Object>();
+                final Map<Long, Object> msgMap = new ConcurrentHashMap<>();
                 final Object msgMapLock = new Object();
                 MessageHandler mcb = msg -> {
                     // Remember the message sequence.
@@ -1650,10 +1638,10 @@ public class ITConnectionTest {
                 };
 
                 try (Subscription s1 = sc.subscribe("foo", "bar", mcb,
-                        new SubscriptionOptions.Builder().setManualAcks(true).build())) {
+                        new SubscriptionOptions.Builder().manualAcks().build())) {
                     try (Subscription s2 =
                                  sc.subscribe("foo", "bar", mcb, new SubscriptionOptions.Builder()
-                                         .setManualAcks(true).setAckWait(1, TimeUnit.SECONDS)
+                                         .manualAcks().ackWait(1, TimeUnit.SECONDS)
                                          .build())) {
                         subs[0] = s1;
                         subs[1] = s2;
@@ -1724,10 +1712,10 @@ public class ITConnectionTest {
                 };
 
                 try (Subscription s1 = sc.subscribe("foo", "bar", mcb,
-                        new SubscriptionOptions.Builder().setManualAcks(true).build())) {
+                        new SubscriptionOptions.Builder().manualAcks().build())) {
                     try (Subscription s2 =
                                  sc.subscribe("foo", "bar", mcb, new SubscriptionOptions.Builder()
-                                         .setManualAcks(true).setAckWait(1, TimeUnit.SECONDS)
+                                         .manualAcks().ackWait(1, TimeUnit.SECONDS)
                                          .build())) {
                         subs[0] = s1;
                         subs[1] = s2;
@@ -1773,7 +1761,7 @@ public class ITConnectionTest {
                 final AtomicInteger received = new AtomicInteger(0);
 
                 // Capture the messages that are delivered.
-                final Map<Long, Message> msgs = new ConcurrentHashMap<Long, Message>();
+                final Map<Long, Message> msgs = new ConcurrentHashMap<>();
                 MessageHandler mcb = msg -> {
                     // Remember the message.
                     msgs.put(msg.getSequence(), msg);
@@ -1796,14 +1784,12 @@ public class ITConnectionTest {
                 // received 6-10.
                 try (Subscription sub = sc.subscribe("foo", mcb,
                         new SubscriptionOptions.Builder().deliverAllAvailable()
-                                .setAckWait(1, TimeUnit.SECONDS).setManualAcks(true).build())) {
+                                .ackWait(1, TimeUnit.SECONDS).manualAcks().build())) {
                     assertTrue("Did not receive at least 10 messages",
                             latch.await(5, TimeUnit.SECONDS));
 
                     sleep(1500, TimeUnit.MILLISECONDS); // Wait for redelivery
-                    Iterator<Message> it = msgs.values().iterator();
-                    while (it.hasNext()) {
-                        Message msg = it.next();
+                    for (Message msg : msgs.values()) {
                         if ((msg.getSequence() % 2 == 0) && !msg.isRedelivered()) {
                             fail("Expected a redelivered flag to be set on msg: "
                                     + msg.getSequence());
@@ -1904,12 +1890,12 @@ public class ITConnectionTest {
                 MessageHandler cb = msg -> {
                     try {
                         msg.ack();
-                    } catch (IOException | TimeoutException e) {
+                    } catch (IOException e) {
                         /* NOOP */
                     }
                 };
 
-                SubscriptionOptions sopts = new SubscriptionOptions.Builder().setManualAcks(true)
+                SubscriptionOptions sopts = new SubscriptionOptions.Builder().manualAcks()
                         .deliverAllAvailable().build();
                 sc.subscribe("foo", cb, sopts);
                 // Close while acking may happen
@@ -2036,7 +2022,7 @@ public class ITConnectionTest {
                 Subscription sub1 = sc.subscribe("foo", msg -> {});
                 Subscription sub2 = sc.subscribe("foo", msg -> {});
 
-                // For this test, change the reqTimeoutto very low value
+                // For this test, change the reqTimeout to a very low value
                 ((StreamingConnectionImpl)sc).lock();
                 try {
                     ((StreamingConnectionImpl)sc).opts.connectTimeout = Duration.ofMillis(10);

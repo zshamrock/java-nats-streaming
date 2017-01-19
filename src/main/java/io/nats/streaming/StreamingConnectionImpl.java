@@ -48,9 +48,9 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
 
     static final String ERR_MANUAL_ACK = NatsStreaming.PFX + "cannot manually ack in auto-ack mode";
 
-    static final Logger logger = LoggerFactory.getLogger(StreamingConnectionImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(StreamingConnectionImpl.class);
 
-    final ReadWriteLock mu = new ReentrantReadWriteLock();
+    private final ReadWriteLock mu = new ReentrantReadWriteLock();
 
     private String clientId;
     private String clusterId;
@@ -60,24 +60,23 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     String subCloseRequests; // Subject to send subscription close requests.
     String closeRequests; // Subject to send close requests.
     String ackSubject; // publish acks
-    io.nats.client.Subscription ackSubscription;
-    String hbInbox;
+    private io.nats.client.Subscription ackSubscription;
     io.nats.client.Subscription hbSubscription;
     io.nats.client.MessageHandler hbCallback;
 
     Map<String, Subscription> subMap;
     Map<String, AckClosure> pubAckMap;
-    BlockingQueue<PubAck> pubAckChan;
+    private BlockingQueue<PubAck> pubAckChan;
     Options opts;
     io.nats.client.Connection nc;
 
-    Timer ackTimer = new Timer(true);
+    final Timer ackTimer = new Timer(true);
 
     boolean ncOwned = false;
 
     ExecutorService exec = Executors.newCachedThreadPool();
 
-    protected StreamingConnectionImpl() {
+    StreamingConnectionImpl() {
 
     }
 
@@ -116,13 +115,8 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
 
         try {
             // Create a heartbeat inbox
-            hbInbox = nc.newInbox();
-            hbCallback = new MessageHandler() {
-                @Override
-                public void onMessage(Message msg) {
-                    processHeartBeat(msg);
-                }
-            };
+            String hbInbox = nc.newInbox();
+            hbCallback = msg -> processHeartBeat(msg);
             hbSubscription = nc.subscribe(hbInbox, hbCallback);
 
             // Send Request to discover the cluster
@@ -131,7 +125,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
                     .setHeartbeatInbox(hbInbox).build();
             // logger.trace("Sending ConnectRequest:\n{}", req.toString().trim());
             byte[] bytes = req.toByteArray();
-            Message reply = null;
+            Message reply;
             reply = nc.request(discoverSubject, bytes, opts.getConnectTimeout().toMillis());
             if (reply == null) {
                 throw new IOException(ERR_CONNECTION_REQ_TIMEOUT);
@@ -153,25 +147,20 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
             closeRequests = cr.getCloseRequests();
 
             // Setup the ACK subscription
-            ackSubject = String.format("%s.%s", NatsStreaming.DEFAULT_ACK_PREFIX, NUID.nextGlobal
-                    ());
-            ackSubscription = nc.subscribe(ackSubject, new MessageHandler() {
-                public void onMessage(io.nats.client.Message msg) {
-                    processAck(msg);
-                }
-            });
+            ackSubject = String.format("%s.%s", NatsStreaming.DEFAULT_ACK_PREFIX, NUID.nextGlobal()
+            );
+            ackSubscription = nc.subscribe(ackSubject, msg -> processAck(msg));
             ackSubscription.setPendingLimits(1024 ^ 2, 32 * 1024 ^ 2);
             pubAckMap = new HashMap<>();
 
             // Create Subscription map
             subMap = new HashMap<>();
 
-            pubAckChan = new LinkedBlockingQueue<PubAck>(opts.getMaxPubAcksInFlight());
+            pubAckChan = new LinkedBlockingQueue<>(opts.getMaxPubAcksInFlight());
         } catch (IOException e) {
             exThrown = true;
             if (io.nats.client.Nats.ERR_TIMEOUT.equals(e.getMessage())) {
-                IOException te = new IOException(ERR_CONNECTION_REQ_TIMEOUT, e);
-                throw te;
+                throw new IOException(ERR_CONNECTION_REQ_TIMEOUT, e);
             } else {
                 throw e;
             }
@@ -179,7 +168,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
             if (exThrown) {
                 try {
                     close();
-                } catch (Exception e2) {
+                } catch (Exception e) {
                     /* NOOP -- can't do anything if close fails */
                 }
             }
@@ -204,7 +193,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     @Override
     public void close() throws IOException, InterruptedException {
         logger.trace("In STAN close()");
-        io.nats.client.Connection nc = null;
+        io.nats.client.Connection nc;
         this.lock();
         try {
             // Capture for NATS calls below
@@ -244,7 +233,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
                 CloseRequest req = CloseRequest.newBuilder().setClientID(clientId).build();
                 logger.trace("CLOSE request: [{}]", req);
                 byte[] bytes = req.toByteArray();
-                Message reply = null;
+                Message reply;
                 reply = nc.request(closeRequests, bytes, opts.getConnectTimeout().toMillis());
                 if (reply == null) {
                     throw new IOException(NatsStreaming.ERR_CLOSE_REQ_TIMEOUT);
@@ -271,18 +260,18 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         }
     }
 
-    protected AckClosure createAckClosure(AckHandler ah, BlockingQueue<String> ch) {
+    AckClosure createAckClosure(AckHandler ah, BlockingQueue<String> ch) {
         return new AckClosure(ah, ch);
     }
 
-    protected SubscriptionImpl createSubscription(String subject, String qgroup,
-                                                  io.nats.streaming.MessageHandler cb,
-                                                  StreamingConnectionImpl conn,
-                                                  SubscriptionOptions opts) {
+    private SubscriptionImpl createSubscription(String subject, String qgroup,
+                                                io.nats.streaming.MessageHandler cb,
+                                                StreamingConnectionImpl conn,
+                                                SubscriptionOptions opts) {
         return new SubscriptionImpl(subject, qgroup, cb, conn, opts);
     }
 
-    protected void processHeartBeat(Message msg) {
+    void processHeartBeat(Message msg) {
         // No payload assumed, just reply.
         io.nats.client.Connection nc;
         this.rLock();
@@ -308,7 +297,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     public void publish(String subject, byte[] data) throws IOException, InterruptedException {
         final BlockingQueue<String> ch = createErrorChannel();
         publish(subject, data, null, ch);
-        String err = null;
+        String err;
         try {
             err = ch.take();
             if (!err.isEmpty()) {
@@ -331,10 +320,10 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         return publish(subject, data, ah, null);
     }
 
-    String publish(String subject, byte[] data, AckHandler ah, BlockingQueue<String> ch)
+    private String publish(String subject, byte[] data, AckHandler ah, BlockingQueue<String> ch)
             throws IOException, InterruptedException {
-        String subj = null;
-        String ackSubject = null;
+        String subj;
+        String ackSubject;
         Duration ackTimeout;
         BlockingQueue<PubAck> pac;
         final AckClosure a;
@@ -390,8 +379,6 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         try {
             a.ackTask = createAckTimerTask(guid);
             ackTimer.schedule(a.ackTask, ackTimeout.toMillis());
-        } catch (Exception e) {
-            throw e;
         } finally {
             this.unlock();
         }
@@ -421,12 +408,11 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     public Subscription subscribe(String subject, String queue, io.nats.streaming.MessageHandler cb,
                                   SubscriptionOptions opts) throws IOException,
             InterruptedException {
-        SubscriptionImpl sub = null;
-        io.nats.client.Connection nc = null;
+        SubscriptionImpl sub;
+        io.nats.client.Connection nc;
         this.lock();
         try {
             if (getNatsConnection() == null) {
-                sub = null;
                 throw new IllegalStateException(NatsStreaming.ERR_CONNECTION_CLOSED);
             }
             sub = createSubscription(subject, queue, cb, this, opts);
@@ -442,14 +428,13 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         sub.wLock();
         try {
             // Listen for actual messages
-            io.nats.client.Subscription nsub = nc.subscribe(sub.inbox, this);
-            sub.inboxSub = nsub;
+            sub.inboxSub = nc.subscribe(sub.inbox, this);
 
             // Create a subscription request
             // FIXME(dlc) add others.
             SubscriptionRequest sr = createSubscriptionRequest(sub);
 
-            Message reply = null;
+            Message reply;
             // logger.trace("Sending SubscriptionRequest:\n{}", sr);
             reply = nc.request(subRequests, sr.toByteArray(), 2L, TimeUnit.SECONDS);
             if (reply == null) {
@@ -457,7 +442,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
                 throw new IOException(ERR_SUB_REQ_TIMEOUT);
             }
 
-            SubscriptionResponse response = null;
+            SubscriptionResponse response;
             try {
                 response = SubscriptionResponse.parseFrom(reply.getData());
             } catch (InvalidProtocolBufferException e) {
@@ -476,7 +461,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         return sub;
     }
 
-    protected SubscriptionRequest createSubscriptionRequest(SubscriptionImpl sub) {
+    SubscriptionRequest createSubscriptionRequest(SubscriptionImpl sub) {
         SubscriptionOptions subOpts = sub.getOptions();
         SubscriptionRequest.Builder srb = SubscriptionRequest.newBuilder();
         String clientId = sub.getConnection().getClientId();
@@ -515,8 +500,8 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     }
 
     // Process an ack from the STAN cluster
-    protected void processAck(Message msg) {
-        PubAck pa = null;
+    void processAck(Message msg) {
+        PubAck pa;
         Exception ex = null;
         try {
             pa = PubAck.parseFrom(msg.getData());
@@ -550,7 +535,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
     }
 
     TimerTask createAckTimerTask(String guid) {
-        TimerTask task = new java.util.TimerTask() {
+        return new TimerTask() {
             public void run() {
                 try {
                     processAckTimeout(guid);
@@ -562,10 +547,9 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
                 }
             }
         };
-        return task;
     }
 
-    protected void processAckTimeout(String guid) {
+    void processAckTimeout(String guid) {
         AckClosure ackClosure = removeAck(guid);
         if (ackClosure == null) {
             return;
@@ -573,13 +557,13 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         if (ackClosure.ah != null) {
             ackClosure.ah.onAck(guid, new TimeoutException(NatsStreaming.ERR_TIMEOUT));
         } else if (ackClosure.ch != null && !ackClosure.ch.offer(NatsStreaming.ERR_TIMEOUT)) {
-                logger.warn("stan: processAckTimeout unable to write timeout error to ack channel");
+            logger.warn("stan: processAckTimeout unable to write timeout error to ack channel");
         }
     }
 
-    protected AckClosure removeAck(String guid) {
-        AckClosure ackClosure = null;
-        BlockingQueue<PubAck> pac = null;
+    AckClosure removeAck(String guid) {
+        AckClosure ackClosure;
+        BlockingQueue<PubAck> pac;
         TimerTask timerTask = null;
         this.lock();
         try {
@@ -619,15 +603,15 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         processMsg(msg);
     }
 
-    protected io.nats.streaming.Message createStanMessage(MsgProto msgp) {
+    io.nats.streaming.Message createStanMessage(MsgProto msgp) {
         return new io.nats.streaming.Message(msgp);
     }
 
-    protected void processMsg(io.nats.client.Message raw) {
+    void processMsg(io.nats.client.Message raw) {
         io.nats.streaming.Message stanMsg = null;
-        boolean isClosed = false;
-        SubscriptionImpl sub = null;
-        io.nats.client.Connection nc = null;
+        boolean isClosed;
+        SubscriptionImpl sub;
+        io.nats.client.Connection nc;
 
         try {
             // logger.trace("In processMsg, msg = {}", raw);
@@ -646,8 +630,6 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
             nc = getNatsConnection();
             isClosed = (nc == null);
             sub = (SubscriptionImpl) subMap.get(raw.getSubject());
-        } catch (Exception e) {
-            throw e;
         } finally {
             unlock();
         }
@@ -660,10 +642,10 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         // Store in msg for backlink
         stanMsg.setSubscription(sub);
 
-        io.nats.streaming.MessageHandler cb = null;
-        String ackSubject = null;
-        boolean isManualAck = false;
-        StreamingConnectionImpl subsc = null;
+        io.nats.streaming.MessageHandler cb;
+        String ackSubject;
+        boolean isManualAck;
+        StreamingConnectionImpl subsc;
 
         sub.rLock();
         try {
@@ -671,8 +653,6 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
             ackSubject = sub.getAckInbox();
             isManualAck = sub.getOptions().isManualAcks();
             subsc = sub.getConnection(); // Can be nil if sub has been unsubscribed
-        } catch (Exception e) {
-            throw e;
         } finally {
             sub.rUnlock();
         }
@@ -709,7 +689,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         return this.nc;
     }
 
-    protected void setNatsConnection(io.nats.client.Connection nc) {
+    private void setNatsConnection(io.nats.client.Connection nc) {
         this.nc = nc;
     }
 
@@ -725,17 +705,19 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         mu.writeLock().unlock();
     }
 
-    void rLock() {
+    private void rLock() {
         mu.readLock().lock();
     }
 
-    void rUnlock() { mu.readLock().unlock(); }
+    private void rUnlock() {
+        mu.readLock().unlock();
+    }
 
-    protected io.nats.client.Subscription getAckSubscription() {
+    io.nats.client.Subscription getAckSubscription() {
         return this.ackSubscription;
     }
 
-    protected io.nats.client.Subscription getHbSubscription() {
+    io.nats.client.Subscription getHbSubscription() {
         return this.hbSubscription;
     }
 

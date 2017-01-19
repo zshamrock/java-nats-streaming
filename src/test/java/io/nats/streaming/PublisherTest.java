@@ -10,10 +10,11 @@ import static io.nats.streaming.UnitTestUtilities.runServer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import io.nats.streaming.examples.Publisher;
-
 import ch.qos.logback.classic.Logger;
-
+import io.nats.streaming.examples.Publisher;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -24,10 +25,6 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.ExpectedException;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 @Category(IntegrationTest.class)
 public class PublisherTest {
     static final Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -35,7 +32,7 @@ public class PublisherTest {
 
     static final LogVerifier verifier = new LogVerifier();
 
-    static final String clusterId = UnitTestUtilities.testClusterName;
+    private static final String clusterId = UnitTestUtilities.testClusterName;
 
     @Rule
     public ExpectedException thrown = ExpectedException.none();

@@ -11,7 +11,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import io.nats.streaming.protobuf.StartPosition;
-
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Calendar;
+import java.util.concurrent.TimeUnit;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -20,15 +23,10 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Calendar;
-import java.util.concurrent.TimeUnit;
-
 @Category(UnitTest.class)
 public class SubscriptionOptionsTest {
 
-    static SubscriptionOptions testOpts;
+    private static SubscriptionOptions testOpts;
 
     @Rule
     public TestCasePrinterRule pr = new TestCasePrinterRule(System.out);
@@ -40,8 +38,8 @@ public class SubscriptionOptionsTest {
      */
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
-        testOpts = new SubscriptionOptions.Builder().setAckWait(Duration.ofMillis(500))
-                .setDurableName("foo").setManualAcks(true).setMaxInFlight(10000)
+        testOpts = new SubscriptionOptions.Builder().ackWait(Duration.ofMillis(500))
+                .durableName("foo").manualAcks().maxInFlight(10000)
                 .startAtSequence(12345).build();
     }
 
@@ -79,7 +77,7 @@ public class SubscriptionOptionsTest {
         assertEquals(500, testOpts.getAckWait().toMillis());
 
         SubscriptionOptions opts =
-                new SubscriptionOptions.Builder().setAckWait(1, TimeUnit.SECONDS).build();
+                new SubscriptionOptions.Builder().ackWait(1, TimeUnit.SECONDS).build();
         assertEquals(1000, opts.getAckWait().toMillis());
     }
 

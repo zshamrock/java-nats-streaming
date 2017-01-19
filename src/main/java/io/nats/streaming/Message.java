@@ -8,10 +8,8 @@ package io.nats.streaming;
 
 import io.nats.streaming.protobuf.Ack;
 import io.nats.streaming.protobuf.MsgProto;
-
 import java.io.IOException;
 import java.time.Instant;
-import java.util.concurrent.TimeoutException;
 
 /**
  * A {@code Message} object is used to send a message containing a stream of uninterpreted bytes.
@@ -194,10 +192,9 @@ public class Message {
      * Acknowledges the message to the STAN cluster.
      * 
      * @throws IOException if an I/O exception occurs
-     * @throws TimeoutException if the acknowledgement times out
      */
-    public void ack() throws IOException, TimeoutException {
-        String ackSubject = null;
+    public void ack() throws IOException {
+        String ackSubject;
         boolean isManualAck;
         StreamingConnectionImpl sc;
         // Look up subscription
@@ -206,8 +203,6 @@ public class Message {
             ackSubject = sub.getAckInbox();
             isManualAck = sub.getOptions().isManualAcks();
             sc = sub.getConnection();
-        } catch (Exception e) {
-            throw e;
         } finally {
             sub.rUnlock();
         }
