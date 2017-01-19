@@ -10,7 +10,6 @@ import io.nats.streaming.protobuf.Ack;
 import io.nats.streaming.protobuf.MsgProto;
 import java.io.IOException;
 import java.time.Instant;
-import java.util.concurrent.TimeoutException;
 
 /**
  * A {@code Message} object is used to send a message containing a stream of uninterpreted bytes.

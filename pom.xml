@@ -69,7 +69,7 @@
         <java-nats-version>1.0-SNAPSHOT</java-nats-version>
 
         <!-- Used for downloading and installing a server binary for tests -->
-        <server.version>0.3.6</server.version>
+        <server.version>0.3.8</server.version>
         <server.exec.name>nats-streaming-server</server.exec.name>
         <server.exec.pkg>${server.exec.name}-v${server.version}-${nats.os}-${nats.arch}</server.exec.pkg>
         <server.exec.pkg.url>https://github.com/nats-io/${server.exec.name}/releases/download/v${server.version}/${server.exec.pkg}.zip</server.exec.pkg.url>

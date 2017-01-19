@@ -116,12 +116,7 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         try {
             // Create a heartbeat inbox
             String hbInbox = nc.newInbox();
-            hbCallback = new MessageHandler() {
-                @Override
-                public void onMessage(Message msg) {
-                    processHeartBeat(msg);
-                }
-            };
+            hbCallback = msg -> processHeartBeat(msg);
             hbSubscription = nc.subscribe(hbInbox, hbCallback);
 
             // Send Request to discover the cluster
@@ -154,18 +149,14 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
             // Setup the ACK subscription
             ackSubject = String.format("%s.%s", NatsStreaming.DEFAULT_ACK_PREFIX, NUID.nextGlobal()
             );
-            ackSubscription = nc.subscribe(ackSubject, new MessageHandler() {
-                public void onMessage(io.nats.client.Message msg) {
-                    processAck(msg);
-                }
-            });
+            ackSubscription = nc.subscribe(ackSubject, msg -> processAck(msg));
             ackSubscription.setPendingLimits(1024 ^ 2, 32 * 1024 ^ 2);
             pubAckMap = new HashMap<>();
 
             // Create Subscription map
             subMap = new HashMap<>();
 
-            pubAckChan = new LinkedBlockingQueue<PubAck>(opts.getMaxPubAcksInFlight());
+            pubAckChan = new LinkedBlockingQueue<>(opts.getMaxPubAcksInFlight());
         } catch (IOException e) {
             exThrown = true;
             if (io.nats.client.Nats.ERR_TIMEOUT.equals(e.getMessage())) {
