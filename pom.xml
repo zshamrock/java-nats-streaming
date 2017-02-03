@@ -10,7 +10,7 @@
     <parent>
         <groupId>io.nats</groupId>
         <artifactId>nats-parent</artifactId>
-        <version>1.12</version>
+        <version>1.13</version>
     </parent>
 
     <groupId>io.nats</groupId>
@@ -66,7 +66,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
 
         <!-- project-specific plugin versions -->
-        <java-nats-version>1.0-SNAPSHOT</java-nats-version>
+        <java-nats-version>1.0</java-nats-version>
 
         <!-- Used for downloading and installing a server binary for tests -->
         <server.version>0.3.8</server.version>
