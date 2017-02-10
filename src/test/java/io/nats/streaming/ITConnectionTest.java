@@ -2016,6 +2016,17 @@ public class ITConnectionTest {
     }
 
     @Test
+    public void testNatsConnectionName() throws Exception {
+        try (NatsStreamingServer ignored = runServer(clusterName)) {
+            Options opts = new Options.Builder().build();
+            try (StreamingConnection sc = NatsStreaming.connect(clusterName, clientName, opts)) {
+                Connection nc = sc.getNatsConnection();
+                assertEquals(clientName, nc.getName());
+            }
+        }
+    }
+
+    @Test
     public void testTimeoutOnRequests() throws Exception {
         try (NatsStreamingServer srv = runServer(clusterName)) {
             try (StreamingConnection sc = newDefaultConnection()) {
