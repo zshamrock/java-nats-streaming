@@ -181,7 +181,9 @@ class StreamingConnectionImpl implements StreamingConnection, io.nats.client.Mes
         io.nats.client.Connection nc = null;
         if (getNatsConnection() == null) {
             if (opts.getNatsUrl() != null) {
-                nc = Nats.connect(opts.getNatsUrl());
+                io.nats.client.Options natsOpts = new io.nats.client.Options.Builder()
+                        .name(clientId).build();
+                nc = Nats.connect(opts.getNatsUrl(), natsOpts);
             } else {
                 nc = Nats.connect();
             }
