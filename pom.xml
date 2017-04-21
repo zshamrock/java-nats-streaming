@@ -426,27 +426,44 @@
                     </execution>
                 </executions>
             </plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-shade-plugin</artifactId>
-				<version>2.4.3</version>
-				<executions>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>shade</goal>
-						</goals>
-						<configuration>
-							<relocations>
-								<relocation>
-									<pattern>com.google.protobuf</pattern>
-									<shadedPattern>shaded.nats.com.google.protobuf</shadedPattern>
-								</relocation>
-							</relocations>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.4.3</version>
+                <executions>
+                        <execution>
+                                <phase>package</phase>
+                                <goals>
+                                        <goal>shade</goal>
+                                </goals>
+                                <configuration>
+                                        <relocations>
+                                                <relocation>
+                                                        <pattern>com.google.protobuf</pattern>
+                                                        <shadedPattern>shaded.nats.com.google.protobuf</shadedPattern>
+                                                </relocation>
+                                        </relocations>
+                                </configuration>
+                        </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                <compilerArgs>
+                        <!-- <arg>-verbose</arg> -->
+                        <arg>-Xlint:all,-options,-path</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <configuration>
+                    <tagNameFormat>@{project.version}</tagNameFormat>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
