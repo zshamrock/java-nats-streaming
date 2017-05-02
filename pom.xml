@@ -124,7 +124,7 @@
     <build>
         <plugins>
             <plugin>
-                <!-- This plugin takes care of packaging the artifact as 
+                <!-- This plugin takes care of packaging the artifact as
                     an OSGi Bundle -->
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
@@ -244,7 +244,7 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <executions>
-                    <!-- Prepares the property pointing to the JaCoCo runtime 
+                    <!-- Prepares the property pointing to the JaCoCo runtime
                         agent which is passed as VM argument when Maven the Surefire plugin is executed. -->
                     <execution>
                         <id>pre-unit-test</id>
@@ -252,15 +252,15 @@
                             <goal>prepare-agent</goal>
                         </goals>
                         <configuration>
-                            <!-- Sets the path to the file which contains 
+                            <!-- Sets the path to the file which contains
                                 the execution data. -->
                             <destFile>${jacoco.ut.execution.data.file}</destFile>
-                            <!-- Sets the name of the property containing 
+                            <!-- Sets the name of the property containing
                                 the settings for JaCoCo runtime agent. -->
                             <propertyName>surefireArgLine</propertyName>
                         </configuration>
                     </execution>
-                    <!-- Ensures that the code coverage report for unit tests 
+                    <!-- Ensures that the code coverage report for unit tests
                         is created after unit tests have been run. -->
                     <execution>
                         <id>post-unit-test</id>
@@ -269,10 +269,10 @@
                             <goal>report</goal>
                         </goals>
                         <configuration>
-                            <!-- Sets the path to the file which contains 
+                            <!-- Sets the path to the file which contains
                                 the execution data. -->
                             <dataFile>${jacoco.ut.execution.data.file}</dataFile>
-                            <!-- Sets the output directory for the code coverage 
+                            <!-- Sets the output directory for the code coverage
                                 report. -->
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
                             <!-- Exclude protobuf-generated sources -->
@@ -281,7 +281,7 @@
                             </excludes>
                         </configuration>
                     </execution>
-                    <!-- Prepares the property pointing to the JaCoCo runtime 
+                    <!-- Prepares the property pointing to the JaCoCo runtime
                         agent which is passed as VM argument when Maven the Failsafe plugin is executed. -->
                     <execution>
                         <id>pre-integration-test</id>
@@ -290,15 +290,15 @@
                             <goal>prepare-agent</goal>
                         </goals>
                         <configuration>
-                            <!-- Sets the path to the file which contains 
+                            <!-- Sets the path to the file which contains
                                 the execution data. -->
                             <destFile>${jacoco.it.execution.data.file}</destFile>
-                            <!-- Sets the name of the property containing 
+                            <!-- Sets the name of the property containing
                                 the settings for JaCoCo runtime agent. -->
                             <propertyName>failsafeArgLine</propertyName>
                         </configuration>
                     </execution>
-                    <!-- Ensures that the code coverage report for integration 
+                    <!-- Ensures that the code coverage report for integration
                         tests after integration tests have been run. -->
                     <execution>
                         <id>post-integration-test</id>
@@ -307,10 +307,10 @@
                             <goal>report</goal>
                         </goals>
                         <configuration>
-                            <!-- Sets the path to the file which contains 
+                            <!-- Sets the path to the file which contains
                                 the execution data. -->
                             <dataFile>${jacoco.it.execution.data.file}</dataFile>
-                            <!-- Sets the output directory for the code coverage 
+                            <!-- Sets the output directory for the code coverage
                                 report. -->
                             <outputDirectory>${project.reporting.outputDirectory}/jacoco-it</outputDirectory>
                             <!-- Exclude protobuf-generated sources -->
@@ -326,10 +326,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!-- Sets the VM argument line used when unit tests are 
+                    <!-- Sets the VM argument line used when unit tests are
                         run. -->
                     <argLine>${surefireArgLine}</argLine>
-                    <!-- Skips unit tests if the value of skip.unit.tests 
+                    <!-- Skips unit tests if the value of skip.unit.tests
                         property is true -->
                     <skipTests>${skip.unit.tests}</skipTests>
                     <!-- Excludes integration tests when unit tests are run. -->
@@ -356,7 +356,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <executions>
-                    <!-- Ensures that both integration-test and verify goals 
+                    <!-- Ensures that both integration-test and verify goals
                         of the Failsafe Maven plugin are executed. -->
                     <execution>
                         <id>integration-tests</id>
@@ -365,11 +365,11 @@
                             <goal>verify</goal>
                         </goals>
                         <configuration>
-                            <!-- Sets the VM argument line used when integration 
+                            <!-- Sets the VM argument line used when integration
                                 tests are run. -->
                             <argLine>${failsafeArgLine}</argLine>
 
-                            <!-- Skips integration tests if the value of 
+                            <!-- Skips integration tests if the value of
                                 skip.integration.tests property is true -->
                             <skipTests>${skip.integration.tests}</skipTests>
                         </configuration>
@@ -398,7 +398,7 @@
                     <footer>java-nats-streaming:${project.version}</footer>
                     <author>false</author>
                     <doctitle>${project.name} (${project.version})</doctitle>
-                    <!-- <stylesheetfile>${basedir}/src/main/javadoc/kenai-stylesheet.css</stylesheetfile> 
+                    <!-- <stylesheetfile>${basedir}/src/main/javadoc/kenai-stylesheet.css</stylesheetfile>
                         <javadocDirectory>${basedir}/src/main/javadoc</javadocDirectory> -->
                     <docfilessubdirs>true</docfilessubdirs>
                     <additionalJOption>-J-Xmx1024m</additionalJOption>
@@ -439,6 +439,27 @@
                 <configuration>
                     <tagNameFormat>@{project.version}</tagNameFormat>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>2.4.3</version>
+                <executions>
+                        <execution>
+                                <phase>package</phase>
+                                <goals>
+                                        <goal>shade</goal>
+                                </goals>
+                                <configuration>
+                                        <relocations>
+                                                <relocation>
+                                                        <pattern>com.google.protobuf</pattern>
+                                                        <shadedPattern>shaded.nats.com.google.protobuf</shadedPattern>
+                                                </relocation>
+                                        </relocations>
+                                </configuration>
+                        </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
