@@ -7,6 +7,8 @@
 package io.nats.streaming;
 
 import io.nats.streaming.protobuf.StartPosition;
+
+import java.io.Serializable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
@@ -130,8 +132,10 @@ public class SubscriptionOptions {
     /**
      * A Builder implementation for creating an immutable {@code SubscriptionOptions} object.
      */
-    public static final class Builder {
-        String durableName;
+    public static final class Builder implements Serializable {
+        private static final long serialVersionUID = 1476017376308805473L;
+
+		String durableName;
         int maxInFlight = SubscriptionImpl.DEFAULT_MAX_IN_FLIGHT;
         Duration ackWait = Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT);
         StartPosition startAt = StartPosition.NewOnly;
