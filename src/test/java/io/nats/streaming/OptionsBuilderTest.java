@@ -20,7 +20,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import io.nats.client.Connection;
-import io.nats.client.Nats;
+import io.nats.client.EmptyConnection;
 
 @Category(UnitTest.class)
 public class OptionsBuilderTest {
@@ -38,7 +38,7 @@ public class OptionsBuilderTest {
      */
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
-    	natsConn = Nats.connect();
+    	natsConn = new EmptyConnection();
         testOptsBuilder = new Options.Builder()
         		.pubAckWait(Duration.ofMillis(500))
                 .connectWait(Duration.ofMillis(1500))
