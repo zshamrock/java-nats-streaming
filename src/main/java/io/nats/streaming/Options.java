@@ -6,6 +6,7 @@
 
 package io.nats.streaming;
 
+import java.io.Serializable;
 import java.time.Duration;
 
 public class Options {
@@ -49,9 +50,11 @@ public class Options {
         return maxPubAcksInFlight;
     }
 
-    public static final class Builder {
-        private String natsUrl = NatsStreaming.DEFAULT_NATS_URL;
-        private io.nats.client.Connection natsConn;
+    public static final class Builder implements Serializable {
+		private static final long serialVersionUID = 4774214916207501660L;
+		
+		private String natsUrl = NatsStreaming.DEFAULT_NATS_URL;
+        private transient io.nats.client.Connection natsConn; // A Connection is not Serializable
         private Duration connectTimeout = Duration.ofSeconds(NatsStreaming.DEFAULT_CONNECT_WAIT);
         private Duration ackTimeout = Duration.ofMillis(SubscriptionImpl.DEFAULT_ACK_WAIT);
         private String discoverPrefix = NatsStreaming.DEFAULT_DISCOVER_PREFIX;

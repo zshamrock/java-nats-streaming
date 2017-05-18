@@ -25,8 +25,12 @@ import io.nats.streaming.protobuf.PubMsg;
 import io.nats.streaming.protobuf.SubscriptionRequest;
 import io.nats.streaming.protobuf.SubscriptionResponse;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.concurrent.CountDownLatch;
@@ -338,4 +342,29 @@ class UnitTestUtilities {
                         ".streaming");
         lbLog.setLevel(level);
     }
+    
+	protected static Object serializeDeserialize(Object object)
+			throws IOException, ClassNotFoundException {
+		byte[] bytes = null;
+		ByteArrayOutputStream bos = null;
+		ObjectOutputStream oos = null;
+		bos = new ByteArrayOutputStream();
+		oos = new ObjectOutputStream(bos);
+		oos.writeObject(object);
+		oos.flush();
+		bytes = bos.toByteArray();
+		oos.close();
+		bos.close();
+
+		Object obj = null;
+		ByteArrayInputStream bis = null;
+		ObjectInputStream ois = null;
+		bis = new ByteArrayInputStream(bytes);
+		ois = new ObjectInputStream(bis);
+		obj = ois.readObject();
+		bis.close();
+		ois.close();
+		return obj;
+	}
+	
 }

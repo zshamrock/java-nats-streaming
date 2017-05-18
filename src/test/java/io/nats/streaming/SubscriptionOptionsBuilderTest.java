@@ -8,11 +8,7 @@ package io.nats.streaming;
 
 import static org.junit.Assert.assertTrue;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.time.Duration;
 
 import org.junit.After;
@@ -59,35 +55,11 @@ public class SubscriptionOptionsBuilderTest {
      */
     @Test
     public void testSerializable() throws ClassNotFoundException, IOException {
-        final SubscriptionOptions.Builder serializedTestOpts = (SubscriptionOptions.Builder) serializeDeserialize(testOptsBuilder);
+        final SubscriptionOptions.Builder serializedTestOpts = (SubscriptionOptions.Builder) UnitTestUtilities.serializeDeserialize(testOptsBuilder);
         
         assertTrue(equals(testOptsBuilder, serializedTestOpts));
     }
 
-	protected static Object serializeDeserialize(Object object)
-			throws IOException, ClassNotFoundException {
-		byte[] bytes = null;
-		ByteArrayOutputStream bos = null;
-		ObjectOutputStream oos = null;
-		bos = new ByteArrayOutputStream();
-		oos = new ObjectOutputStream(bos);
-		oos.writeObject(object);
-		oos.flush();
-		bytes = bos.toByteArray();
-		oos.close();
-		bos.close();
-
-		Object obj = null;
-		ByteArrayInputStream bis = null;
-		ObjectInputStream ois = null;
-		bis = new ByteArrayInputStream(bytes);
-		ois = new ObjectInputStream(bis);
-		obj = ois.readObject();
-		bis.close();
-		ois.close();
-		return obj;
-	}
-	
 	protected static boolean equals(SubscriptionOptions.Builder obj1, SubscriptionOptions.Builder obj2) {
 		if (obj1 == obj2)
 			return true;
