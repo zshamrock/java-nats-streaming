@@ -35,6 +35,8 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -226,10 +228,10 @@ class UnitTestUtilities {
         if (defaultServer == null) {
             defaultServer = new NatsStreamingServer(debug);
             try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+    			waitForStreamingServerUp();
+    		} catch (TimeoutException | InterruptedException e) {
+    			e.printStackTrace();
+    		}
         }
     }
 
@@ -243,10 +245,11 @@ class UnitTestUtilities {
     static synchronized void bounceDefaultServer(int delayMillis) {
         stopDefaultServer();
         try {
+			waitForStreamingServerDown();
             Thread.sleep(delayMillis);
-        } catch (InterruptedException e) {
-            // NOOP
-        }
+		} catch (TimeoutException | InterruptedException e) {
+			e.printStackTrace();
+		}
         startDefaultServer();
     }
 
@@ -261,10 +264,10 @@ class UnitTestUtilities {
     private NatsStreamingServer createServerOnPort(int port, boolean debug) {
         NatsStreamingServer nsrv = new NatsStreamingServer(port, debug);
         try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+			waitForStreamingServerUp();
+		} catch (TimeoutException | InterruptedException e) {
+			e.printStackTrace();
+		}
         return nsrv;
     }
 
@@ -274,9 +277,41 @@ class UnitTestUtilities {
 
     private NatsStreamingServer createServerWithConfig(String configFile, boolean debug) {
         NatsStreamingServer nsrv = new NatsStreamingServer(configFile, debug);
-        sleep(500);
+        try {
+			waitForStreamingServerUp();
+		} catch (TimeoutException | InterruptedException e) {
+			e.printStackTrace();
+		}
         return nsrv;
     }
+
+	protected static void waitForStreamingServerUp() throws TimeoutException, InterruptedException {
+		for (int i = 1; i <= 20; i++) {
+			Thread.sleep(100 * i);
+			if (isNatsStreamingServerRunning())
+				return ;
+		}
+		throw new TimeoutException();
+	}
+
+	protected static void waitForStreamingServerDown() throws TimeoutException, InterruptedException {
+		for (int i = 1; i <= 20; i++) {
+			Thread.sleep(100 * i);
+			if (! isNatsStreamingServerRunning())
+				return ;
+		}
+		throw new TimeoutException();
+	}
+    
+    protected static boolean isNatsStreamingServerRunning() {
+        try {
+    		final StreamingConnection connection = NatsStreaming.connect(testClusterName, testClientName + "_tmp");
+    		connection.close();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+	}
 
     void getConnz() {
         URL url = null;
