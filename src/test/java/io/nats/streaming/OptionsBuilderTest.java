@@ -6,56 +6,23 @@
 
 package io.nats.streaming;
 
+import static io.nats.streaming.UnitTestUtilities.runServer;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.time.Duration;
 
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import io.nats.client.Connection;
-import io.nats.client.EmptyConnection;
 
 @Category(UnitTest.class)
 public class OptionsBuilderTest {
 
-    private static Options.Builder testOptsBuilder;
-	private static Connection natsConn;
-
     @Rule
     public TestCasePrinterRule pr = new TestCasePrinterRule(System.out);
-
-    /**
-     * Setup for all cases in this test.
-     * 
-     * @throws Exception if something goes wrong
-     */
-    @BeforeClass
-    public static void setUpBeforeClass() throws Exception {
-    	natsConn = new EmptyConnection();
-        testOptsBuilder = new Options.Builder()
-        		.pubAckWait(Duration.ofMillis(500))
-                .connectWait(Duration.ofMillis(1500))
-                .discoverPrefix("PrEfiX")
-                .maxPubAcksInFlight(10000)
-                .natsConn(natsConn)
-                .natsUrl("nats://nats");
-    }
-
-    @AfterClass
-    public static void tearDownAfterClass() throws Exception {}
-
-    @Before
-    public void setUp() throws Exception {}
-
-    @After
-    public void tearDown() throws Exception {}
 
     /**
      * Test method for {@link java.io.Serializable}.
@@ -64,11 +31,20 @@ public class OptionsBuilderTest {
      */
     @Test
     public void testSerializable() throws ClassNotFoundException, IOException {
-        final Options.Builder serializedTestOpts = (Options.Builder) UnitTestUtilities.serializeDeserialize(testOptsBuilder);
-        
-        assertTrue(equals(testOptsBuilder, serializedTestOpts));
+	try (NatsStreamingServer srv = runServer("test-cluster")) {
+            Connection natsConn = new io.nats.client.ConnectionFactory().createConnection();
+            Options.Builder testOptsBuilder = new Options.Builder()
+					.pubAckWait(Duration.ofMillis(500))
+					.connectWait(Duration.ofMillis(1500))
+					.discoverPrefix("PrEfiX")
+					.maxPubAcksInFlight(10000)
+					.natsConn(natsConn)
+					.natsUrl("nats://nats");
+	    final Options.Builder serializedTestOpts = (Options.Builder) UnitTestUtilities.serializeDeserialize(testOptsBuilder);
+            assertTrue(equals(testOptsBuilder, serializedTestOpts));
+		}
     }
-	
+    
 	protected static boolean equals(Options.Builder build1, Options.Builder build2) {
 		if (build1 == build2)
 			return true;
@@ -92,6 +68,7 @@ public class OptionsBuilderTest {
 			return false;
 		if (obj1.getMaxPubAcksInFlight() != obj2.getMaxPubAcksInFlight())
 			return false;
+		// natsConn is transient
 /*		if (obj1.getNatsConn() == null) {
 			if (obj2.getNatsConn() != null)
 				return false;
