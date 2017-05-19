@@ -364,10 +364,10 @@ class UnitTestUtilities {
     private static NatsStreamingServer runServer(String clusterId, boolean debug) {
         NatsStreamingServer srv = new NatsStreamingServer(clusterId, debug);
         try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+			waitForStreamingServerUp();
+		} catch (TimeoutException | InterruptedException e) {
+			e.printStackTrace();
+		}
         return srv;
     }
 
