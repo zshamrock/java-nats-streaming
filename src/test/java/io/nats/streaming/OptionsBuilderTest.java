@@ -6,7 +6,7 @@
 
 package io.nats.streaming;
 
-import static io.nats.streaming.UnitTestUtilities.runServer;
+import static io.nats.streaming.UnitTestUtilities.setupMockNatsConnection;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -28,21 +28,20 @@ public class OptionsBuilderTest {
      * Test method for {@link java.io.Serializable}.
      * @throws IOException 
      * @throws ClassNotFoundException 
+     * @throws InterruptedException 
      */
     @Test
-    public void testSerializable() throws ClassNotFoundException, IOException {
-	try (NatsStreamingServer srv = runServer(UnitTestUtilities.testClusterName)) {
-            Connection natsConn = new io.nats.client.ConnectionFactory().createConnection();
-            Options.Builder testOptsBuilder = new Options.Builder()
-					.pubAckWait(Duration.ofMillis(500))
-					.connectWait(Duration.ofMillis(1500))
-					.discoverPrefix("PrEfiX")
-					.maxPubAcksInFlight(10000)
-					.natsConn(natsConn)
-					.natsUrl("nats://nats");
-	    final Options.Builder serializedTestOpts = (Options.Builder) UnitTestUtilities.serializeDeserialize(testOptsBuilder);
-            assertTrue(equals(testOptsBuilder, serializedTestOpts));
-		}
+    public void testSerializable() throws ClassNotFoundException, IOException, InterruptedException {
+    	Connection nc = setupMockNatsConnection();
+    	Options.Builder testOptsBuilder = new Options.Builder()
+    			.pubAckWait(Duration.ofMillis(500))
+    			.connectWait(Duration.ofMillis(1500))
+    			.discoverPrefix("PrEfiX")
+    			.maxPubAcksInFlight(10000)
+    			.natsConn(nc)
+    			.natsUrl("nats://nats");
+    	final Options.Builder serializedTestOpts = (Options.Builder) UnitTestUtilities.serializeDeserialize(testOptsBuilder);
+    	assertTrue(equals(testOptsBuilder, serializedTestOpts));
     }
     
 	protected static boolean equals(Options.Builder build1, Options.Builder build2) {
