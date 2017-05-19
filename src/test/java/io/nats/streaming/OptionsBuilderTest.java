@@ -31,7 +31,7 @@ public class OptionsBuilderTest {
      */
     @Test
     public void testSerializable() throws ClassNotFoundException, IOException {
-	try (NatsStreamingServer srv = runServer("test-cluster")) {
+	try (NatsStreamingServer srv = runServer(UnitTestUtilities.testClusterName)) {
             Connection natsConn = new io.nats.client.ConnectionFactory().createConnection();
             Options.Builder testOptsBuilder = new Options.Builder()
 					.pubAckWait(Duration.ofMillis(500))
